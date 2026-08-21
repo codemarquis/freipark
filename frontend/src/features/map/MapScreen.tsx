@@ -1,6 +1,10 @@
+import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Camera, Map } from '@maplibre/maplibre-react-native';
-import type { StyleSpecification } from '@maplibre/maplibre-react-native';
+import type { CameraRef, StyleSpecification } from '@maplibre/maplibre-react-native';
+import { useSpots } from './useSpots';
+import { SpotLayer } from './SpotLayer';
+import type { SpotRow } from '../../lib/types';
 
 const BERLIN: [number, number] = [13.405, 52.52];
 const PMTILES_URL = process.env.EXPO_PUBLIC_PMTILES_URL ?? '';
@@ -78,14 +82,29 @@ const MAP_STYLE: StyleSpecification = {
 };
 
 export function MapScreen() {
+  const cameraRef = useRef<CameraRef>(null);
+  const [selectedSpot, setSelectedSpot] = useState<SpotRow | null>(null);
+  const { geojson, onRegionDidChange } = useSpots();
+
+  const handleSpotPress = useCallback((spot: SpotRow) => {
+    setSelectedSpot(spot);
+  }, []);
+
   return (
     <View style={styles.container}>
-      <Map style={styles.map} mapStyle={MAP_STYLE}>
+      <Map
+        style={styles.map}
+        mapStyle={MAP_STYLE}
+        onRegionDidChange={onRegionDidChange}
+      >
         <Camera
-          initialViewState={{
-            center: BERLIN,
-            zoom: 13,
-          }}
+          ref={cameraRef}
+          initialViewState={{ center: BERLIN, zoom: 13 }}
+        />
+        <SpotLayer
+          geojson={geojson}
+          onSpotPress={handleSpotPress}
+          cameraRef={cameraRef}
         />
       </Map>
     </View>
