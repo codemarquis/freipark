@@ -12,6 +12,7 @@
     "expo-linking": "~57.0.7",
     "expo-status-bar": "~57.0.1",
     "pmtiles": "^4.5.0",
+    "protomaps-themes-base": "^4.5.0",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-gesture-handler": "~2.32.0",
