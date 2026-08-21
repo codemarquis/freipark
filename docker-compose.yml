@@ -1,7 +1,8 @@
 services:
 
-  # One-shot: downloads Berlin PBF and runs OSRM preprocessing.
-  # Skips if /data/berlin.osrm.fileIndex already exists (volume persists across restarts).
+  # One-shot: downloads Germany PBF and runs OSRM preprocessing.
+  # Skips if /data/.osrm_ready exists (sentinel written only after all three steps succeed).
+  # First run takes several hours — api waits indefinitely via depends_on: service_healthy.
   osrm-init:
     image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     volumes:
@@ -9,18 +10,19 @@ services:
     entrypoint: /bin/sh
     command: >-
       -c "
-      if [ ! -f /data/berlin.osrm.fileIndex ]; then
-        wget -q -O /data/berlin.osm.pbf
-          https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf &&
-        osrm-extract -p /opt/car.lua /data/berlin.osm.pbf &&
-        rm /data/berlin.osm.pbf &&
-        osrm-partition /data/berlin.osrm &&
-        osrm-customize /data/berlin.osrm;
+      if [ ! -f /data/.osrm_ready ]; then
+        wget -q --timeout=60 --tries=3 -O /data/germany.osm.pbf
+          https://download.geofabrik.de/europe/germany-latest.osm.pbf &&
+        osrm-extract -p /opt/car.lua /data/germany.osm.pbf &&
+        rm /data/germany.osm.pbf &&
+        osrm-partition /data/germany.osrm &&
+        osrm-customize /data/germany.osrm &&
+        touch /data/.osrm_ready;
       fi
       "
     restart: "no"
 
-  osrm-berlin:
+  osrm-germany:
     image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     depends_on:
       osrm-init:
@@ -28,14 +30,14 @@ services:
     volumes:
       - osrm_data:/data
     command: >-
-      osrm-routed --algorithm mld --max-table-size 10000 /data/berlin.osrm
+      osrm-routed --algorithm mld --max-table-size 10000 /data/germany.osrm
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 120s
     logging:
       driver: json-file
       options:
@@ -49,11 +51,11 @@ services:
     restart: always
     env_file: ./backend/.env
     environment:
-      OSRM_BERLIN_URL: ${OSRM_BERLIN_URL:-http://osrm-berlin:5000}
+      OSRM_GERMANY_URL: ${OSRM_GERMANY_URL:-http://osrm-germany:5000}
     ports:
       - "8000:8000"
     depends_on:
-      osrm-berlin:
+      osrm-germany:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health/db || exit 1"]
