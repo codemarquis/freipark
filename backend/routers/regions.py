@@ -19,13 +19,13 @@ class Region(BaseModel):
     bbox: RegionBbox
 
 
-# Adding a second city = append one Region(...) + set OSRM_<CITY>_URL in the environment.
-# The /route endpoint never references city names directly — it dispatches by coordinate.
+# Adding a new country/region = append one Region(...) + set OSRM_<NAME>_URL in the environment.
+# The /route endpoint never references region names directly — it dispatches by coordinate.
 REGIONS: list[Region] = [
     Region(
-        name="berlin",
-        osrm_url=os.environ.get("OSRM_BERLIN_URL", "http://osrm-berlin:5000"),
-        bbox=RegionBbox(min_lon=13.088, min_lat=52.338, max_lon=13.761, max_lat=52.677),
+        name="germany",
+        osrm_url=os.environ.get("OSRM_GERMANY_URL", "http://osrm-germany:5000"),
+        bbox=RegionBbox(min_lon=5.87, min_lat=47.27, max_lon=15.04, max_lat=55.06),
     ),
 ]
 
