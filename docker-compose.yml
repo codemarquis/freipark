@@ -1,0 +1,71 @@
+services:
+
+  # One-shot: downloads Berlin PBF and runs OSRM preprocessing.
+  # Skips if /data/berlin.osrm.fileIndex already exists (volume persists across restarts).
+  osrm-init:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    volumes:
+      - osrm_data:/data
+    entrypoint: /bin/sh
+    command: >-
+      -c "
+      if [ ! -f /data/berlin.osrm.fileIndex ]; then
+        wget -q -O /data/berlin.osm.pbf
+          https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf &&
+        osrm-extract -p /opt/car.lua /data/berlin.osm.pbf &&
+        rm /data/berlin.osm.pbf &&
+        osrm-partition /data/berlin.osrm &&
+        osrm-customize /data/berlin.osrm;
+      fi
+      "
+    restart: "no"
+
+  osrm-berlin:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    depends_on:
+      osrm-init:
+        condition: service_completed_successfully
+    volumes:
+      - osrm_data:/data
+    command: >-
+      osrm-routed --algorithm mld --max-table-size 10000 /data/berlin.osrm
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No host port — only the api service reaches it on the internal network.
+
+  api:
+    build:
+      context: ./backend
+    restart: always
+    env_file: ./backend/.env
+    environment:
+      OSRM_BERLIN_URL: ${OSRM_BERLIN_URL:-http://osrm-berlin:5000}
+    ports:
+      - "8000:8000"
+    depends_on:
+      osrm-berlin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health/db || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  osrm_data:
