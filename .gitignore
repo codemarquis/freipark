@@ -1,0 +1,29 @@
+# Environment — never commit real credentials
+.env
+*.env
+!*.env.example
+
+# Supabase CLI local state
+supabase/.temp/
+
+# OSM data cache and map tiles — large binary assets, served from R2
+backend/scripts/data/
+*.pmtiles
+pmtiles.zip
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Expo / React Native
+.expo/
+node_modules/
+dist/
+
+# macOS
+.DS_Store
