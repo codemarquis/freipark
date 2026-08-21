@@ -13,9 +13,7 @@ services:
       if [ ! -f /data/.osrm_ready ]; then
         apt-get update -qq &&
         apt-get install -y --no-install-recommends curl &&
-        curl -fSL --connect-timeout 30 --retry 3 --retry-delay 5
-          -o /data/germany.osm.pbf
-          https://download.geofabrik.de/europe/germany-latest.osm.pbf &&
+        curl -fL -o /data/germany.osm.pbf https://download.geofabrik.de/europe/germany-latest.osm.pbf &&
         osrm-extract -p /opt/car.lua /data/germany.osm.pbf &&
         rm /data/germany.osm.pbf &&
         osrm-partition /data/germany.osrm &&
