@@ -12,7 +12,7 @@ services:
       -c "
       if [ ! -f /data/.osrm_ready ]; then
         apt-get update -qq &&
-        apt-get install -y --no-install-recommends curl &&
+        apt-get install -y --no-install-recommends curl ca-certificates &&
         curl -fL -o /data/germany.osm.pbf https://download.geofabrik.de/europe/germany-latest.osm.pbf &&
         osrm-extract -p /opt/car.lua /data/germany.osm.pbf &&
         rm /data/germany.osm.pbf &&
