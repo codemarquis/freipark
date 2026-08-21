@@ -8,7 +8,11 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.freipark.app"
+      "bundleIdentifier": "com.freipark.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["maps", "comgooglemaps"],
+        "NSLocationWhenInUseUsageDescription": "FreiPark uses your location to show nearby parking spots and directions to the one you select."
+      }
     },
     "android": {
       "package": "com.freipark.app",

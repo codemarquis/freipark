@@ -10,6 +10,7 @@
     "expo": "~57.0.15",
     "expo-dev-client": "~57.0.14",
     "expo-linking": "~57.0.7",
+    "expo-location": "~57.0.12",
     "expo-status-bar": "~57.0.1",
     "pmtiles": "^4.5.0",
     "protomaps-themes-base": "^4.5.0",

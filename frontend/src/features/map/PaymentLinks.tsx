@@ -1,18 +1,25 @@
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-// iOS URL verified against App Store listing (id449594317).
-// Android package net.easypark.android — unverified, update if Play Store listing differs.
-const EASYPARK_URL =
-  Platform.OS === 'ios'
-    ? 'https://apps.apple.com/us/app/easypark-parking-made-easy/id449594317'
-    : 'https://play.google.com/store/apps/details?id=net.easypark.android';
+const EASYPARK_IOS_NATIVE = 'itms-apps://apps.apple.com/app/id449594317';
+const EASYPARK_IOS_WEB = 'https://apps.apple.com/us/app/easypark-parking-made-easy/id449594317';
+const EASYPARK_ANDROID = 'https://play.google.com/store/apps/details?id=net.easypark.android';
+
+function openEasyPark() {
+  if (Platform.OS === 'ios') {
+    Linking.openURL(EASYPARK_IOS_NATIVE).catch(() =>
+      Linking.openURL(EASYPARK_IOS_WEB).catch(() => {})
+    );
+  } else {
+    Linking.openURL(EASYPARK_ANDROID).catch(() => {});
+  }
+}
 
 export function PaymentLinks() {
   return (
     <View style={styles.row}>
       <Pressable
         style={styles.button}
-        onPress={() => Linking.openURL(EASYPARK_URL)}
+        onPress={openEasyPark}
       >
         <Text style={styles.buttonText}>Open EasyPark</Text>
       </Pressable>
