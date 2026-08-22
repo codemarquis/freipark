@@ -46,6 +46,23 @@ services:
         max-file: "3"
     # No host port — only the api service reaches it on the internal network.
 
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   api:
     build:
       context: ./backend
@@ -53,8 +70,6 @@ services:
     env_file: ./backend/.env
     environment:
       OSRM_GERMANY_URL: ${OSRM_GERMANY_URL:-http://osrm-germany:5000}
-    ports:
-      - "8000:8000"
     depends_on:
       osrm-germany:
         condition: service_healthy
@@ -72,3 +87,5 @@ services:
 
 volumes:
   osrm_data:
+  caddy_data:
+  caddy_config:
