@@ -73,10 +73,12 @@ def main(city: str, force_download: bool, download_only: bool) -> None:
         raise click.ClickException("DATABASE_URL not set — check backend/.env")
 
     click.echo(f"[freipark-import] city={city}")
-    city_id, geofabrik_url = _fetch_city(dsn, city)
+    city_id, geofabrik_url, bbox = _fetch_city(dsn, city)
 
     _DATA.mkdir(exist_ok=True)
-    pbf_path   = _DATA / f"{city}.osm.pbf"
+    # Key the raw PBF by URL filename so cities sharing a state extract
+    # (e.g. munich + nuremberg → bayern-latest.osm.pbf) share one download.
+    pbf_path   = _DATA / Path(geofabrik_url).name
     filtered   = _DATA / f"{city}-parking.osm.pbf"
     geojsonseq = _DATA / f"{city}-parking.geojsonseq"
 
@@ -86,7 +88,14 @@ def main(city: str, force_download: bool, download_only: bool) -> None:
         click.echo("[freipark-import] --download-only: stopping before filter/import")
         return
 
-    _filter_osm(pbf_path, filtered)
+    if bbox is not None:
+        area_pbf = _DATA / f"{city}-area.osm.pbf"
+        _extract_bbox(pbf_path, area_pbf, bbox)
+        source = area_pbf
+    else:
+        source = pbf_path
+
+    _filter_osm(source, filtered)
     _export_geojson(filtered, geojsonseq)
     inserted, updated = _import_rows(dsn, city_id, geojsonseq)
     click.echo(f"[freipark-import] done — inserted={inserted}, updated={updated}")
@@ -96,10 +105,15 @@ def main(city: str, force_download: bool, download_only: bool) -> None:
 # Pipeline steps
 # ---------------------------------------------------------------------------
 
-def _fetch_city(dsn: str, slug: str) -> tuple[str, str]:
+def _fetch_city(dsn: str, slug: str) -> tuple[str, str, tuple[float, float, float, float] | None]:
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute(
-            "SELECT id::text, geofabrik_url FROM cities WHERE slug = %s", (slug,)
+            """
+            SELECT id::text, geofabrik_url,
+                   ST_XMin(bbox), ST_YMin(bbox), ST_XMax(bbox), ST_YMax(bbox)
+            FROM cities WHERE slug = %s
+            """,
+            (slug,)
         )
         row = cur.fetchone()
     if row is None:
@@ -107,7 +121,8 @@ def _fetch_city(dsn: str, slug: str) -> tuple[str, str]:
             f"City '{slug}' not found in cities table — "
             "insert a row with the Geofabrik URL first"
         )
-    return row[0], row[1]
+    bbox = (float(row[2]), float(row[3]), float(row[4]), float(row[5])) if row[2] is not None else None
+    return row[0], row[1], bbox
 
 
 def _download(url: str, dest: Path, *, force: bool) -> None:
@@ -127,6 +142,22 @@ def _download(url: str, dest: Path, *, force: bool) -> None:
     click.echo()
     mb = dest.stat().st_size / 1_000_000
     click.echo(f"  saved    {dest.name} ({mb:.0f} MB)")
+
+
+def _extract_bbox(src: Path, dest: Path, bbox: tuple[float, float, float, float]) -> None:
+    min_lon, min_lat, max_lon, max_lat = bbox
+    click.echo(f"  extract  {src.name} → {dest.name} ({min_lon},{min_lat},{max_lon},{max_lat})")
+    subprocess.run(
+        [
+            "osmium", "extract",
+            "--bbox", f"{min_lon},{min_lat},{max_lon},{max_lat}",
+            "--overwrite", "-o", str(dest), str(src),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    kb = dest.stat().st_size / 1_000
+    click.echo(f"  extracted ({kb:.0f} KB)")
 
 
 def _filter_osm(src: Path, dest: Path) -> None:
