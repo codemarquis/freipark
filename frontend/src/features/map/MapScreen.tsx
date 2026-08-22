@@ -33,6 +33,7 @@ const MAP_STYLE: StyleSpecification = {
 
 export function MapScreen() {
   const cameraRef = useRef<CameraRef>(null);
+  const hasCenteredRef = useRef(false);
   const [selectedSpot, setSelectedSpot] = useState<SpotRow | null>(null);
   const [userLocation, setUserLocation] = useState<{ lon: number; lat: number } | null>(null);
   const [locationDenied, setLocationDenied] = useState(false);
@@ -55,6 +56,18 @@ export function MapScreen() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (userLocation && !hasCenteredRef.current && cameraRef.current) {
+      hasCenteredRef.current = true;
+      cameraRef.current.setCamera({
+        centerCoordinate: [userLocation.lon, userLocation.lat],
+        zoomLevel: 14,
+        animationMode: 'flyTo',
+        animationDuration: 1200,
+      });
+    }
+  }, [userLocation]);
 
   const handleSpotPress = useCallback((spot: SpotRow) => {
     setSelectedSpot(spot);
