@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Camera, Map } from '@maplibre/maplibre-react-native';
 import type { CameraRef, StyleSpecification } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
@@ -82,6 +82,9 @@ export function MapScreen() {
           cameraRef={cameraRef}
         />
       </Map>
+      <View style={styles.attribution} pointerEvents="none">
+        <Text style={styles.attributionText}>© OpenStreetMap contributors</Text>
+      </View>
       <SpotDetailSheet
         spot={selectedSpot}
         onClose={handleSheetClose}
@@ -95,4 +98,17 @@ export function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
+  attribution: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  attributionText: {
+    fontSize: 10,
+    color: '#1e293b',
+  },
 });
