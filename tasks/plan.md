@@ -1,3 +1,11 @@
+> **Reconciled 2026-08-23:** every checkbox below was left unchecked despite
+> the corresponding work being done — this file was never updated after
+> initial planning. All T1–T7 and M1–M8 tasks are complete; checkboxes now
+> reflect that. A new § Routing, Search & Multi-City section at the bottom
+> documents substantial work that shipped with **no corresponding plan
+> entries at all** (it wasn't in either spec when built). See `SPEC-map.md`
+> and `SPEC-infra.md` for the reconciled specs those sections now match.
+
 # Implementation Plan: infra module
 
 **Spec:** [SPEC-infra.md](../SPEC-infra.md)  
@@ -36,17 +44,17 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 *Manual setup. Do before any code.*
 
-- [ ] **T1a: Create Supabase project**
+- [x] **T1a: Create Supabase project**
   - Acceptance: Project exists at `app.supabase.com`; PostGIS enabled; project ref, URL, anon key, and service role key are in hand
   - Verify: `supabase projects list` shows the project
   - Files: none
 
-- [ ] **T1b: Configure supabase CLI**
+- [x] **T1b: Configure supabase CLI**
   - Acceptance: `supabase/config.toml` has the correct `project_id`; `supabase link --project-ref <ref>` succeeds
   - Verify: `supabase status` returns the linked project
   - Files: `supabase/config.toml`
 
-- [ ] **T1c: Apply initial migration**
+- [x] **T1c: Apply initial migration**
   - Acceptance: `supabase db push` runs without errors; `cities` and `parking_spots` tables exist; Berlin seed row present (`SELECT slug FROM cities` returns `'berlin'`); all indexes created; RLS enabled on `parking_spots`
   - Verify: `supabase db push` exits 0; run verification queries in Supabase SQL editor
   - Files: `supabase/migrations/001_initial_schema.sql` (already written — no edits needed)
@@ -57,12 +65,12 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 *Manual setup. Can run in parallel with T1.*
 
-- [ ] **T2a: Create R2 bucket and configure public access**
+- [x] **T2a: Create R2 bucket and configure public access**
   - Acceptance: Bucket `freipark-tiles` exists; public read enabled; CORS rule allows `GET` from all origins
   - Verify: `curl -I https://pub-<hash>.r2.dev/` returns 200 or 403 (not a network error)
   - Files: none (dashboard config)
 
-- [ ] **T2b: Generate and upload berlin.pmtiles**
+- [x] **T2b: Generate and upload berlin.pmtiles**
   - Acceptance: `berlin.pmtiles` object exists in bucket; a range request returns partial content
   - Verify: `curl -H "Range: bytes=0-4095" https://pub-<hash>.r2.dev/berlin.pmtiles` returns HTTP 206 with ~4KB body
   - Files: none (object upload)
@@ -74,12 +82,12 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 *Requires T1 and T2 keys in hand.*
 
-- [ ] **T3a: Create backend env files**
+- [x] **T3a: Create backend env files**
   - Acceptance: `backend/.env.example` committed with all variable names and placeholder values; real `backend/.env` created locally (not committed); `.gitignore` excludes `.env` files
   - Verify: `grep "SUPABASE_URL" backend/.env.example` returns the line; `git status` does not list `backend/.env`
   - Files: `backend/.env.example`, `backend/.env` (local only), `.gitignore`
 
-- [ ] **T3b: Create frontend env files**
+- [x] **T3b: Create frontend env files**
   - Acceptance: `frontend/.env.example` committed; real `frontend/.env` created locally; `EXPO_PUBLIC_PMTILES_URL` points to the live R2 URL from T2b
   - Verify: `grep "EXPO_PUBLIC_PMTILES_URL" frontend/.env` returns the R2 URL
   - Files: `frontend/.env.example`, `frontend/.env` (local only)
@@ -88,12 +96,12 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 ### T4 — Backend DB connection
 
-- [ ] **T4a: Write requirements.txt**
+- [x] **T4a: Write requirements.txt**
   - Acceptance: Includes `fastapi`, `uvicorn`, `asyncpg`, `psycopg2-binary`, `pydantic`, `python-dotenv`; install succeeds cleanly
   - Verify: `pip install -r backend/requirements.txt` exits 0
   - Files: `backend/requirements.txt`
 
-- [ ] **T4b: Implement asyncpg connection pool**
+- [x] **T4b: Implement asyncpg connection pool**
   - Acceptance: `backend/db/connection.py` exports a pool that reads `DATABASE_URL` from env; pool opens on app startup and closes on shutdown; `fastapi dev backend/main.py` starts without error
   - Verify: Server starts; no connection errors in logs
   - Files: `backend/db/connection.py`, `backend/main.py`
@@ -102,12 +110,12 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 ### T5 — OSM import script
 
-- [ ] **T5a: Write Geofabrik download helper**
+- [x] **T5a: Write Geofabrik download helper**
   - Acceptance: `bash backend/scripts/download_osm.sh berlin` fetches `geofabrik_url` from the `cities` row, downloads to `backend/scripts/data/berlin.osm.pbf`; re-running skips the download if file exists
   - Verify: First run produces `data/berlin.osm.pbf` (~400MB); second run prints "already cached" and exits immediately
   - Files: `backend/scripts/download_osm.sh`, add `backend/scripts/data/` to `.gitignore`
 
-- [ ] **T5b: Write import_osm.py**
+- [x] **T5b: Write import_osm.py**
   - Acceptance: `python backend/scripts/import_osm.py --city berlin` (a) fetches the `cities` row for slug `berlin`, (b) invokes `osmium tags-filter` to extract parking features, (c) upserts rows into `parking_spots` via `ON CONFLICT (osm_id, osm_type) DO UPDATE`, (d) logs inserted/updated/unchanged counts; script is idempotent
   - Verify: First run logs `inserted: N, updated: 0`; second run logs `inserted: 0, updated: 0, unchanged: N`
   - Files: `backend/scripts/import_osm.py`
@@ -117,7 +125,7 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 ### T6 — Health endpoint
 
-- [ ] **T6a: Implement GET /health/db**
+- [x] **T6a: Implement GET /health/db**
   - Acceptance: Returns `{"status": "ok", "spot_count": N, "city": "berlin"}` where N > 0 after the import; returns HTTP 503 `{"status": "error"}` if DB is unreachable
   - Verify: `curl http://localhost:8000/health/db` after T5b returns `spot_count > 0`
   - Files: `backend/routers/health.py`, `backend/main.py`
@@ -126,7 +134,7 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 ### T7 — Infra tests
 
-- [ ] **T7a: Write test_db.py**
+- [x] **T7a: Write test_db.py**
   - Acceptance: All four tests from `SPEC-infra.md § Testing Strategy` pass — PostGIS enabled, Berlin seed row present, spatial KNN uses Index Scan, RLS blocks anon INSERT
   - Verify: `cd backend && pytest tests/test_db.py -v` exits 0 with 4 passing
   - Files: `backend/tests/test_db.py`, `backend/tests/conftest.py`
@@ -138,15 +146,15 @@ T1 and T2 are independent manual setup steps that can be done in parallel. Every
 
 All nine success criteria from `SPEC-infra.md`:
 
-- [ ] T1c — schema applied; `cities` and `parking_spots` tables, all indexes, RLS confirmed
-- [ ] T1c — Berlin seed row present (`slug = 'berlin'`)
-- [ ] T7a — RLS: anon SELECT succeeds; anon INSERT denied
-- [ ] T7a — spatial index: KNN query plan shows Index Scan, not Seq Scan
-- [ ] T2b — `freipark-tiles` bucket live; `curl -H "Range: bytes=0-4095"` returns HTTP 206
-- [ ] T3  — both `.env.example` files committed
-- [ ] T5b — `python import_osm.py --city berlin` exits 0; row count logged
-- [ ] T6a — `GET /health/db` returns `spot_count > 0`
-- [ ] Final — `git log -p | grep -i 'supabase\|key\|password'` returns nothing
+- [x] T1c — schema applied; `cities` and `parking_spots` tables, all indexes, RLS confirmed
+- [x] T1c — Berlin seed row present (`slug = 'berlin'`)
+- [x] T7a — RLS: anon SELECT succeeds; anon INSERT denied
+- [x] T7a — spatial index: KNN query plan shows Index Scan, not Seq Scan
+- [x] T2b — `freipark-tiles` bucket live; `curl -H "Range: bytes=0-4095"` returns HTTP 206
+- [x] T3  — both `.env.example` files committed
+- [x] T5b — `python import_osm.py --city berlin` exits 0; row count logged
+- [x] T6a — `GET /health/db` returns `spot_count > 0`
+- [x] Final — `git log -p | grep -i 'supabase\|key\|password'` returns nothing
 
 ---
 
@@ -193,7 +201,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 ### M1 — DB migration: `spots_in_bbox` RPC
 
-- [ ] **M1: Write and apply 002_spots_in_bbox.sql**
+- [x] **M1: Write and apply 002_spots_in_bbox.sql**
   - Acceptance: `supabase db push` succeeds; anon JS client can call
     `supabase.rpc('spots_in_bbox', {min_lon:13.3, min_lat:52.4, max_lon:13.6, max_lat:52.6})`
     and receive rows (not a 403 or empty error)
@@ -205,7 +213,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 ### M2 — Expo bootstrap + dependencies
 
-- [ ] **M2: Bootstrap Expo project and install all native deps**
+- [x] **M2: Bootstrap Expo project and install all native deps**
   - Acceptance: `frontend/` contains a valid Expo SDK 53 project with TypeScript;
     `package.json` lists all required deps; `npx expo start` runs Metro without
     dependency errors; `app.json` has bundle ID placeholders
@@ -230,7 +238,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 ### M3 — Supabase client + types
 
-- [ ] **M3: Implement `src/lib/supabase.ts` and `src/lib/types.ts`**
+- [x] **M3: Implement `src/lib/supabase.ts` and `src/lib/types.ts`**
   - Acceptance: `createClient` singleton exported using `EXPO_PUBLIC_*` env vars;
     `SpotRow` interface matches `spots_in_bbox` return columns
     `(id, spot_type, access, operator, capacity, lon, lat)`;
@@ -244,7 +252,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 *Hardest task. Tackle before M5/M6 — validates the native build works.*
 
-- [ ] **M4: Render Berlin base map from R2 PMTiles**
+- [x] **M4: Render Berlin base map from R2 PMTiles**
   - Acceptance: `npx expo run:ios` produces a dev-client build; map renders
     Berlin streets centred at `{lon:13.405, lat:52.52}` zoom 13; network logs
     show `206 Partial Content` from the R2 URL (direct range requests, no proxy)
@@ -264,7 +272,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 ### M5 — `useSpots` hook + geo helpers
 
-- [ ] **M5: Implement viewport-bounded spot query**
+- [x] **M5: Implement viewport-bounded spot query**
   - Acceptance: `useSpots(bounds)` calls `supabase.rpc('spots_in_bbox', ...)`
     when bounds change (debounced 300 ms); returns a GeoJSON `FeatureCollection`
     with `Point` features; each feature's `properties` carries
@@ -277,7 +285,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 ### M6 — SpotLayer
 
-- [ ] **M6: GeoJSON source + cluster + circle layers**
+- [x] **M6: GeoJSON source + cluster + circle layers**
   - Acceptance: Coloured clusters visible over Berlin at zoom 13; zooming in
     reveals individual dots coloured by `access`; tap cluster → camera zooms +2;
     tap spot → `onSpotPress` fires with the `SpotRow`
@@ -290,7 +298,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 ### M7 — SpotDetailSheet + PaymentLinks
 
-- [ ] **M7: Bottom sheet with spot info and payment CTAs**
+- [x] **M7: Bottom sheet with spot info and payment CTAs**
   - Acceptance: Tapping a spot opens `@gorhom/bottom-sheet` at 50% snap;
     sheet shows type / access / operator / capacity; `access='paid'` shows
     "Pay via EasyPark" and "Pay via ParkNow" buttons calling `Linking.openURL`
@@ -305,7 +313,7 @@ M3 and M4 can start in parallel once M2 is done.
 
 ### M8 — Tests + coverage
 
-- [ ] **M8: Unit tests, ≥ 80% coverage on lib + hook**
+- [x] **M8: Unit tests, ≥ 80% coverage on lib + hook**
   - Acceptance: `npx jest --coverage` exits 0; statements/branches ≥ 80% on
     `src/lib/` and `useSpots.ts`; all three test files pass
   - Verify: Coverage report in terminal output
@@ -319,12 +327,50 @@ M3 and M4 can start in parallel once M2 is done.
 
 All nine success criteria from `SPEC-map.md`:
 
-- [ ] M2 + M4 — `npx expo start` QR scannable; map loads within 3 s on WiFi
-- [ ] M4 — R2 `berlin.pmtiles` serves `206 Partial Content` (no tile server)
-- [ ] M5 + M6 — spot clusters visible after pan/zoom in Berlin
-- [ ] M6 — tap cluster zooms in; tap spot opens bottom sheet
-- [ ] M7 — bottom sheet shows correct type / access / operator / capacity
-- [ ] M7 — paid spots show EasyPark + ParkNow buttons; free spots do not
-- [ ] M7 — payment button opens correct App Store / Play Store page (manual)
-- [ ] M8 — `npx jest --coverage` passes, ≥ 80% on `src/lib/` + `useSpots.ts`
-- [ ] M1–M7 — no per-request API cost introduced
+- [x] M2 + M4 — `npx expo start` QR scannable; map loads within 3 s on WiFi
+- [x] M4 — R2 `berlin.pmtiles` serves `206 Partial Content` (no tile server)
+- [x] M5 + M6 — spot clusters visible after pan/zoom in Berlin
+- [x] M6 — tap cluster zooms in; tap spot opens bottom sheet
+- [x] M7 — bottom sheet shows correct type / access / operator / capacity
+- [x] M7 — paid spots show EasyPark + ParkNow buttons; free spots do not
+- [x] M7 — payment button opens correct App Store / Play Store page (manual)
+- [x] M8 — `npx jest --coverage` passes, ≥ 80% on `src/lib/` + `useSpots.ts`
+- [x] M1–M7 — no per-request API cost introduced
+
+---
+---
+
+# Retroactive: Routing, Search & Multi-City
+
+**Specs:** [SPEC-map.md](../SPEC-map.md) § Search & Geocoding, § Routing, § Location & Camera Behaviour; [SPEC-infra.md](../SPEC-infra.md) § Seeded Cities, § Routing infra
+**Status:** Added 2026-08-23. This work shipped across several commits
+(`e19165a` OSRM Germany-wide, `d64e8b9` OSRM infra, `83bdd6a` routing UI,
+`e8279e8` German cities, `a789e69` fly-to-location, `f3009a9` search bar)
+with no task breakdown ever written — going straight from idea to code.
+Retroactively documented here so the plan matches reality; not meant to be
+"executed" like the tasks above.
+
+- [x] **R1: Self-hosted OSRM infra** — `docker-compose.yml` (`osrm-init`,
+  `osrm-germany`), Germany-wide Geofabrik extraction/partition/customize.
+  Zero per-call cost, matching the project's hard constraint.
+- [x] **R2: Backend routing proxy** — `backend/routers/route.py` +
+  `regions.py`; validates destination is in a known region, dispatches to
+  the right OSRM instance, rate-limited 30/min via `slowapi`.
+- [x] **R3: Caddy HTTPS proxy** — automatic TLS for `api.freipark.com`.
+- [x] **R4: Frontend routing UI** — `useRoute.ts`, `RouteLayer.tsx`;
+  `SpotDetailSheet` shows distance/duration or a clear unavailable/loading/
+  denied state.
+- [x] **S1: Search bar + geocoding** — `SearchBar.tsx`, `useGeocoder.ts`
+  against the public Nominatim API, Germany-filtered, debounced.
+- [x] **L1: Location-aware camera** — fly-to-user-location on launch
+  (Germany-bbox-guarded against the simulator's Cupertino default),
+  "Locating…" chip, location-denied banner with a settings deep link.
+- [x] **C1: Multi-city seed** — `004_add_german_cities.sql`, 30+ cities
+  across every German state; `import_all.py` to import them all.
+
+**Known gaps from this retroactive work** (see specs for detail, not
+repeated here): no automated tests for search/routing/multi-city; the
+`GET /health/db` response shape changed (per-city breakdown) without the
+original single-city success criterion being updated until this
+reconciliation; `frontend/.env.example` was missing `EXPO_PUBLIC_API_URL`
+until this reconciliation fixed it.

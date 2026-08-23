@@ -2,18 +2,30 @@
 
 ## Objective
 
-Render a live, interactive map of Berlin parking spots using the tile data
-already served from Cloudflare R2 (`berlin.pmtiles`) and the 65 k spot
+Render a live, interactive map of parking spots using the tile data
+already served from Cloudflare R2 (`berlin.pmtiles`) and the spot
 records already in Supabase.
 
-**User story:** A driver opens FreiPark, sees a map centred on Berlin with
-colour-coded parking markers, scrolls/zooms freely, taps a spot to read its
-type and access rules, and — for paid spots — gets a button that opens the
-EasyPark or ParkNow App Store listing so they can download the payment app.
+> **Status update (2026-08-23):** what shipped goes beyond this spec's
+> original Berlin-only scope. `parking_spots` now covers 30+ major German
+> cities (see `SPEC-infra.md` § Seeded Cities), and two features not in the
+> original spec were added: a location search bar (§ Search & Geocoding)
+> and in-app turn-by-turn routing to a selected spot (§ Routing). Sections
+> below are updated to describe the app as it actually exists; original
+> MVP language ("Berlin", no routing) has been superseded.
+
+**User story:** A driver opens FreiPark, sees a map centred on their
+location (or Berlin, as a fallback) with colour-coded parking markers,
+searches for an address or scrolls/zooms freely, taps a spot to read its
+type and access rules and get walking/driving directions, and — for paid
+spots — gets a button that opens the EasyPark or ParkNow App Store listing
+so they can download the payment app.
 
 **Success looks like:** A real device (or simulator) showing clustered
-Berlin parking spots, rendered from live DB data, with zero per-tile or
-per-request API costs.
+parking spots anywhere in Germany, rendered from live DB data, with
+directions to a tapped spot, and zero per-tile or per-request API costs
+for anything FreiPark itself operates (see § Routing for the one caveat:
+search uses a free third-party API, not a cost we control).
 
 ---
 
@@ -21,14 +33,16 @@ per-request API costs.
 
 | Concern | Choice | Notes |
 |---|---|---|
-| Framework | Expo SDK 53, managed workflow | No bare eject; OTA updates |
-| Navigation | Expo Router (file-based) | Single screen for now |
-| Map renderer | `@maplibre/maplibre-react-native` ^10 | OSS, zero tile-API cost |
+| Framework | Expo SDK 57, managed workflow | No bare eject; OTA updates. Single `App.tsx` root component — **not** Expo Router; no `app/` directory exists |
+| Map renderer | `@maplibre/maplibre-react-native` ^11 | OSS, zero tile-API cost |
 | Tile source | Protomaps PMTiles on Cloudflare R2 | HTTP range requests, zero egress |
 | Spot data | `@supabase/supabase-js` v2, anon key | RLS already set to public read |
-| Spot query | PostgREST RPC `spots_in_bbox` | New migration (002); returns ≤ 2000 pts |
+| Spot query | PostgREST RPC `spots_in_bbox` | Migration 002; returns ≤ 2000 pts |
 | Bottom sheet | `@gorhom/bottom-sheet` v5 | Industry-standard RN bottom sheet |
 | Linking | `expo-linking` | App Store / Play Store URLs only |
+| Location | `expo-location` | Foreground permission; centers camera on launch |
+| Search / geocoding | Nominatim (OpenStreetMap) public API, called directly from the client | Free, no API key — but third-party, rate-limited, and outside our uptime control. See § Search & Geocoding |
+| Routing | FastAPI `/route` endpoint → self-hosted OSRM (Docker) | Zero per-call cost since OSRM runs on our own infra. See § Routing and `SPEC-infra.md` § Routing infra |
 
 **Hard constraints (inherited from project):**
 - No per-call API costs that scale with users
@@ -62,38 +76,47 @@ supabase db push                           # Applies 002_spots_in_bbox.sql
 
 ```
 frontend/
-  app/
-    _layout.tsx           → Root Expo Router layout (safe area, theme)
-    index.tsx             → Entry point — renders <MapScreen />
+  App.tsx                  → Root component — renders <MapScreen /> directly (no router)
+  index.ts                 → Expo entry point (registerRootComponent)
   src/
     features/
       map/
-        MapScreen.tsx     → Full-screen MapLibre map, wires layers + sheet
-        SpotLayer.tsx     → GeoJSON source, cluster layers, circle layers
-        SpotDetailSheet.tsx → Bottom sheet: spot info + payment CTA
-        useSpots.ts       → Hook: calls spots_in_bbox on viewport change
-      payments/
-        PaymentLinks.tsx  → EasyPark / ParkNow App Store link buttons
+        MapScreen.tsx      → Full-screen MapLibre map, wires layers, search, routing, sheet
+        SpotLayer.tsx      → GeoJSON source, cluster layers, circle layers
+        SpotDetailSheet.tsx → Bottom sheet: spot info, route summary, payment CTA
+        SearchBar.tsx      → Address search input + results dropdown
+        useGeocoder.ts     → Debounced Nominatim geocoding hook
+        RouteLayer.tsx     → Renders the route polyline returned by useRoute
+        useRoute.ts        → Hook: fetches /route from the FastAPI backend
+        useSpots.ts        → Hook: calls spots_in_bbox on viewport change
+        PaymentLinks.tsx   → EasyPark / ParkNow App Store link buttons
     lib/
-      supabase.ts         → Supabase JS singleton (anon key)
-      geo.ts              → Bbox helpers (MapLibre bounds → lon/lat tuple)
+      supabase.ts          → Supabase JS singleton (anon key)
+      geo.ts               → Bbox helpers (MapLibre bounds → lon/lat tuple)
+      types.ts             → Shared types (SpotRow, etc.)
   __tests__/
     useSpots.test.ts
     geo.test.ts
     SpotDetailSheet.test.tsx
-  assets/                 → App icon, splash
+  assets/                  → App icon, splash
   app.json
   package.json
   tsconfig.json
-  .env                    → GITIGNORED — real keys
-  .env.example            → Already committed
+  .env                     → GITIGNORED — real keys
+  .env.example             → Already committed
 ```
+
+> Note: `PaymentLinks.tsx` lives under `src/features/map/`, not a separate
+> `src/features/payments/` folder as originally planned — it's small and
+> only ever used from `SpotDetailSheet`, so it wasn't split out.
 
 ```
 supabase/
   migrations/
-    001_initial_schema.sql   → Already applied
-    002_spots_in_bbox.sql    → New: RPC function for map queries
+    001_initial_schema.sql       → Applied — cities + parking_spots tables
+    002_spots_in_bbox.sql        → Applied — RPC function for map queries
+    003_grant_anon_select.sql    → Applied — anon SELECT grant fix
+    004_add_german_cities.sql    → Applied — seeds 30+ German cities beyond Berlin
 ```
 
 ---
@@ -205,9 +228,96 @@ device, or falls back to the web URL in Expo Go / browser.
 
 ---
 
-## Initial Camera
+## Search & Geocoding
 
-Centre: `{ lon: 13.4050, lat: 52.5200 }` (Berlin Mitte), zoom 13.
+*(Not in the original spec — added post-MVP.)*
+
+`SearchBar.tsx` renders a floating text input over the map. `useGeocoder.ts`
+debounces input (400 ms) and, once the query is ≥ 2 characters, calls the
+public Nominatim (OpenStreetMap) search API directly from the client:
+
+```
+https://nominatim.openstreetmap.org/search?q=<query>&format=json&limit=6&countrycodes=de
+```
+
+Results are constrained to Germany (`countrycodes=de`) and capped at 6.
+Selecting a result flies the camera to that location (zoom 14).
+
+**Why this doesn't violate the "no per-call API cost" constraint:** Nominatim
+is free and requires no API key or account. It is, however, a third-party
+service outside our control, bound by
+[Nominatim's usage policy](https://operations.osmfoundation.org/policies/nominatim/)
+(max ~1 req/sec, requires a descriptive `User-Agent` — already set to
+`FreiPark/1.0 (geraldezeani@pm.me)`). If search volume grows enough to risk
+that limit, the fix is self-hosting Nominatim or switching to a paid
+geocoder — not something FreiPark controls today. Treat this as a known
+risk, not a solved problem.
+
+---
+
+## Routing
+
+*(Not in the original spec — added post-MVP.)*
+
+Tapping a spot with a known user location fetches driving directions from
+the FastAPI backend, which proxies to a **self-hosted** OSRM instance
+(zero per-call cost — see `SPEC-infra.md` § Routing infra for the Docker
+Compose setup):
+
+```
+GET {EXPO_PUBLIC_API_URL}/route?from_lon=&from_lat=&to_lon=&to_lat=
+→ { geometry: GeoJSON.LineString, distance_m, duration_s, region }
+```
+
+- `useRoute.ts` fires this request whenever the user's location or the
+  selected spot changes; results (or errors) surface in `RouteState`.
+- `RouteLayer.tsx` draws the returned line string on the map.
+- `SpotDetailSheet` shows `"850 m · 3 min"` (formatted distance/duration),
+  a "Getting directions…" hint while loading, or "Directions unavailable."
+  on error — see `SpotDetailSheet.test.tsx` for the exact formatting rules.
+- If location permission was denied, the sheet shows "Enable location to
+  see directions." instead of attempting a route at all.
+- Backend-side: `backend/routers/route.py` validates the destination falls
+  inside a known `Region` (`backend/routers/regions.py` — currently just
+  `germany`, dispatched by bounding box) before calling OSRM, and rate-limits
+  to 30 requests/minute per IP via `slowapi`.
+
+This is a driving-route summary shown inline in the sheet, not full
+turn-by-turn navigation — there's no in-app maps-style step list. For
+actual navigation, `SpotDetailSheet` still offers "Open in Apple/Google
+Maps" buttons that hand off to the device's native maps app.
+
+---
+
+## Location & Camera Behaviour
+
+*(Expanded from the original "Initial Camera" section — actual behavior is
+more involved than a static center point.)*
+
+**Fallback centre:** `{ lon: 13.4050, lat: 52.5200 }` (Berlin Mitte), zoom 12.
+
+**On launch**, `MapScreen` requests foreground location permission
+(`expo-location`) and:
+
+- **Granted + fix available:** once the fix resolves, the camera flies
+  (`flyTo`, zoom 15, 1.2 s) to the user's location — but only if that
+  location falls inside Germany's bounding box
+  (`{ west: 4.5, south: 46.5, east: 15.1, north: 55.1 }`, matching the
+  `maxBounds` the `Camera` component is constrained to). This guards
+  against the iOS Simulator's default location (Cupertino, CA), which is
+  outside tile coverage — in that case the map stays on the Berlin
+  fallback instead of flying to a location with no rendered tiles.
+- **Granted, fix still resolving:** a small "Locating…" chip shows near the
+  top of the screen; spot loading is not blocked on this.
+- **Denied/restricted:** a dismissible banner reads "Enable location to
+  find spots near you" with a button that opens the device's location
+  settings (`app-settings:` on iOS, `Linking.openSettings()` on Android).
+  The `UserLocation` puck is not rendered, and `SpotDetailSheet` skips
+  routing entirely (see § Routing above).
+
+**Selecting a search result** overrides the camera the same way (`flyTo`,
+zoom 14, 1 s) and marks the camera as already-centred so a late-resolving
+GPS fix won't yank the view back to the user's position.
 
 ---
 
@@ -236,17 +346,30 @@ across feature boundaries except through `src/lib/`.
 
 ## Testing Strategy
 
-**Unit tests** (`jest` + `@testing-library/react-native`):
+**Unit tests** (`jest-expo` + `@testing-library/react-native` v14 — note:
+`render()`/`renderHook()` are `async` in v14; every call site must `await`
+them, and fake-timer tests should prefer `jest.advanceTimersByTimeAsync`
+over `advanceTimersByTime` + a separate `act()` flush, which was a source
+of test-order flakiness):
 - `geo.test.ts` — bbox conversion helpers (pure functions, full coverage)
 - `useSpots.test.ts` — mock Supabase client; assert query params and
   GeoJSON shape returned by the hook
 - `SpotDetailSheet.test.tsx` — payment buttons render only for
   `access = 'paid'`; store URLs are correct strings
 
-**Integration / E2E:** Out of scope for MVP. Mark with `// TODO: E2E` stubs.
+**Integration / E2E:** Out of scope for MVP. `SearchBar`/`useGeocoder` and
+`RouteLayer`/`useRoute` have no dedicated tests yet — flagged as a gap, not
+silently skipped.
 
 **Coverage target:** ≥ 80% on `src/lib/` and `useSpots.ts`.
 UI components: snapshot only.
+
+**Actual coverage as of 2026-08-23** (`npx jest --coverage`):
+`src/lib/` 100%; `useSpots.ts` 100% statements/lines/functions, 87.5%
+branches — target met. `SpotDetailSheet.tsx` (66–71%) and `PaymentLinks.tsx`
+(56%) sit well under 80%, but per this section's own testing strategy UI
+components are snapshot-only and were never meant to hit the 80% bar — the
+repo-wide average (77%) looks worse than the actual target compliance.
 
 ---
 
@@ -262,26 +385,35 @@ UI components: snapshot only.
 - Adding a new npm dependency
 - Changes to `supabase/migrations/` (new SQL, altering existing functions)
 - Any change to `app.json` (bundle ID, permissions, SDK version)
+- Adding or changing a third-party API call from the client (e.g. Nominatim)
+  — it's outside our cost/uptime control even when free
 
 **Never:**
 - Commit `frontend/.env`
 - Construct `easypark://`, `parknow://`, or any other unverified URI scheme
-- Render all 65 k spots at once — always use the viewport-bounded RPC
+- Render all spots for a viewport at once beyond the RPC's own `LIMIT` —
+  always use the viewport-bounded RPC
 - Use the service role key on the frontend
 
 ---
 
 ## Success Criteria
 
-1. `npx expo start` → QR scannable with Expo Go; map loads within 3 s on WiFi
-2. Base map tiles render from R2 (`berlin.pmtiles`); network confirms `206 Partial Content`
-3. Spot clusters visible after pan/zoom anywhere in Berlin
-4. Tapping a cluster zooms in; tapping a single spot opens the bottom sheet
-5. Bottom sheet shows correct type / access / operator for the tapped spot
-6. Paid spots show EasyPark + ParkNow buttons; free spots do not
-7. Tapping a payment button opens the correct App Store / Play Store page (manual device test)
-8. `npx jest --coverage` passes with ≥ 80% on `src/lib/` and `useSpots.ts`
-9. No per-request API cost introduced
+1. ~~`npx expo start` → QR scannable with **Expo Go**~~ — **corrected:** MapLibre
+   is a native module, so Expo Go cannot run this app (this contradicted M2's
+   own task notes in `tasks/plan.md` even in the original spec). Use
+   `npx expo run:ios` / `npx expo run:android` with `expo-dev-client` instead;
+   map loads within 3 s on WiFi. **Met.**
+2. Base map tiles render from R2 (`berlin.pmtiles`); network confirms `206 Partial Content`. **Met.**
+3. Spot clusters visible after pan/zoom anywhere covered by a seeded city (30+ across Germany, not just Berlin). **Met.**
+4. Tapping a cluster zooms in; tapping a single spot opens the bottom sheet. **Met.**
+5. Bottom sheet shows correct type / access / operator for the tapped spot. **Met.**
+6. Paid spots show EasyPark + ParkNow buttons; free spots do not. **Met.**
+7. Tapping a payment button opens the correct App Store / Play Store page (manual device test). **Unverified — requires a manual device test, not automatable.**
+8. `npx jest --coverage` passes with ≥ 80% on `src/lib/` and `useSpots.ts`. **Met** (see § Testing Strategy for exact numbers).
+9. No per-request API cost introduced for anything FreiPark operates (search uses free third-party Nominatim — see § Search & Geocoding for the caveat). **Met.**
+10. *(New)* Searching an address flies the camera there and it's queryable for spots. **Met.**
+11. *(New)* Tapping a spot with a known user location shows a route summary (distance/duration) or a clear reason it's unavailable (loading / error / location denied). **Met.**
 
 ---
 
@@ -293,6 +425,9 @@ UI components: snapshot only.
 | ParkNow deep link? | Same treatment; unconfirmed scheme → store URLs |
 | Spot data transport? | Supabase JS anon client + `spots_in_bbox` RPC |
 | All spots or viewport-bounded? | Viewport-bounded, LIMIT 2000 per query |
-| Expo managed or bare? | Managed, SDK 53 |
+| Expo managed or bare? | Managed, SDK 57 |
 | Platforms? | iOS + Android |
 | Spot colour coding? | free=green, paid=blue, permit=amber, private=red, unknown=grey |
+| *(New)* Geocoding provider? | Nominatim public API, client-side, Germany-filtered — free but third-party (§ Search & Geocoding) |
+| *(New)* Turn-by-turn navigation, or route summary only? | Summary only (distance/duration + polyline); "Open in Maps" handles actual navigation |
+| *(New)* Self-hosted or third-party routing engine? | Self-hosted OSRM via Docker Compose — zero per-call cost, matches the project's hard cost constraint (§ Routing, `SPEC-infra.md`) |

@@ -2,7 +2,12 @@
 
 **Module:** `infra`  
 **Capability map:** [CLAUDE.md](CLAUDE.md) → `infra` is the root dependency of all other modules.  
-**Status:** Draft — awaiting review before implementation begins.
+**Status:** Implemented (T1–T7 complete). This document has been reconciled
+(2026-08-23) against actual repo state; original "Draft" language and a few
+now-inaccurate details (Berlin-only seed, no routing infra) are corrected
+below. Supabase Auth, listed in the original objective, is **not yet
+implemented** — no `src/features/auth` exists; see `CLAUDE.md`'s module
+order (`infra → map → auth`) for where it fits next.
 
 ---
 
@@ -25,18 +30,21 @@ This module produces no user-visible UI. Success means: any other module can con
 | Layer | Choice | Rationale |
 |---|---|---|
 | Database | Supabase (PostgreSQL 15 + PostGIS) | Managed Postgres, free 500MB, built-in auth, RLS, no per-query cost |
-| Auth | Supabase Auth (email+password) | 50k MAU free; cross-device JWT; single vendor with DB |
+| Auth | Supabase Auth (email+password) | 50k MAU free; cross-device JWT; single vendor with DB. **Not yet implemented.** |
 | Map tile storage | Cloudflare R2 | No egress fees (unlike S3); PMTiles served via HTTP range requests |
 | Backend runtime | FastAPI (Python 3.12) | Async, Pydantic, strong PostGIS ecosystem |
 | Schema migrations | Supabase CLI (`supabase db push`) | Version-controlled SQL files in `supabase/migrations/` |
 | OSM data tooling | osmium-tool + psycopg2/asyncpg | osmium for PBF filtering; direct PostGIS COPY for import |
+| Routing engine | Self-hosted OSRM (Docker, `osrm-backend`) | Zero per-call cost, matches the project's hard cost constraint; *not in the original spec* — added to support the map module's routing feature. See § Routing infra |
+| TLS / reverse proxy | Caddy 2 | Automatic HTTPS for `api.freipark.com`; terminates TLS in front of the FastAPI `api` service |
+| Rate limiting | `slowapi` (FastAPI middleware) | Protects the self-hosted OSRM instance from abuse; 30 req/min on `/route` |
 
 ---
 
 ## Commands
 
 ```bash
-# Backend dev server
+# Backend dev server (local, no Docker)
 fastapi dev backend/main.py
 
 # Frontend dev server
@@ -48,11 +56,17 @@ supabase db push
 # Run OSM import — parameterized by city slug
 python backend/scripts/import_osm.py --city berlin
 
+# Import all seeded cities in one pass
+python backend/scripts/import_all.py
+
 # Run backend tests
 cd backend && pytest -v
 
 # Run frontend tests
 cd frontend && npx jest
+
+# Full production stack (OSRM + Caddy + API) — see § Routing infra
+docker compose up -d
 ```
 
 ---
@@ -63,29 +77,36 @@ cd frontend && npx jest
 freipark/
 ├── CLAUDE.md                       # Role/workflow rules
 ├── SPEC-infra.md                   # This file
+├── SPEC-map.md                     # Map module spec
+├── docker-compose.yml              # Production stack: osrm-init, osrm-germany, caddy, api
+├── Caddyfile                       # Reverse proxy: api.freipark.com → api:8000
 ├── tasks/
-│   └── plan.md                     # Implementation plan (Phase 2 output)
+│   └── plan.md                     # Implementation plan (infra + map)
 │
 ├── backend/
-│   ├── main.py                     # FastAPI app entrypoint
-│   ├── routers/                    # Route handlers per feature
-│   ├── models/                     # Pydantic models
+│   ├── main.py                     # FastAPI app entrypoint, mounts routers, rate limiter
+│   ├── Dockerfile                  # Container build for the `api` compose service
+│   ├── routers/
+│   │   ├── health.py               # GET /health/db — per-city spot counts
+│   │   ├── route.py                # GET /route — proxies to self-hosted OSRM, rate-limited
+│   │   └── regions.py              # Region dispatch by bounding box (currently: germany)
 │   ├── db/
 │   │   └── connection.py           # asyncpg pool setup
 │   ├── scripts/
 │   │   ├── import_osm.py           # OSM PBF → PostGIS pipeline (--city <slug>)
-│   │   └── download_osm.sh         # Geofabrik download helper
+│   │   ├── import_all.py           # Runs import_osm.py for every seeded city
+│   │   ├── download_osm.sh         # Geofabrik download helper
+│   │   └── data/                   # Cached PBF downloads — gitignored
 │   ├── tests/
 │   │   └── test_db.py              # Infra tests (schema, indexes, RLS)
 │   ├── requirements.txt
 │   └── .env.example
 │
 ├── frontend/
-│   ├── app/                        # Expo Router file-based routes
+│   ├── App.tsx                     # Root component (no Expo Router — see SPEC-map.md)
 │   ├── src/
 │   │   ├── features/
-│   │   │   ├── map/                # MapLibre components (Module: map)
-│   │   │   └── auth/               # Login/register screens (Module: auth)
+│   │   │   └── map/                # MapLibre + search + routing components (Module: map)
 │   │   └── lib/
 │   │       └── supabase.ts         # Supabase client singleton
 │   ├── package.json
@@ -94,8 +115,17 @@ freipark/
 └── supabase/
     ├── config.toml                 # Supabase project config
     └── migrations/
-        └── 001_initial_schema.sql  # cities + parking_spots tables, indexes, RLS
+        ├── 001_initial_schema.sql      # cities + parking_spots tables, indexes, RLS
+        ├── 002_spots_in_bbox.sql       # RPC for viewport-bounded spot queries
+        ├── 003_grant_anon_select.sql   # Anon SELECT grant fix
+        └── 004_add_german_cities.sql   # Seeds 30+ German cities beyond Berlin
 ```
+
+**Note:** `frontend/src/features/auth/` does not exist yet — Supabase Auth
+is designed for (see § Database Schema and CLAUDE.md's module order) but
+not implemented. `backend/models/` (Pydantic models) also doesn't exist as
+a separate directory; request/response models currently live inline in
+each router file (see `route.py`'s `RouteParams`/`RouteResponse`).
 
 ---
 
@@ -105,7 +135,13 @@ freipark/
 
 The `cities` table makes city a first-class concept rather than a hardcoded value. Adding a second city is inserting a row and running the import — no schema migration required.
 
-Only Berlin is seeded in the MVP. The `geofabrik_url` field drives the import script, making it fully parameterized by city slug.
+**Originally only Berlin was seeded in the MVP; as of migration
+`004_add_german_cities.sql`, 30+ major German cities are seeded** —
+city-states (Hamburg, Bremen) use their own full-city Geofabrik PBF, while
+every other city references its Bundesland (state) PBF plus a `bbox` that
+the import script clips with `osmium extract --bbox` before tag-filtering.
+See § Seeded Cities below for the full list. The `geofabrik_url` field
+drives the import script, making it fully parameterized by city slug.
 
 ```sql
 CREATE TABLE cities (
@@ -127,6 +163,38 @@ VALUES (
   'https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf'
 );
 ```
+
+#### Seeded Cities
+
+*(Not in the original spec — added by migration `004_add_german_cities.sql`.)*
+
+30+ cities across every German state, grouped by which Geofabrik PBF they
+draw from:
+
+| State PBF | Cities |
+|---|---|
+| Full-city PBF (city-states, no `bbox`) | Berlin, Hamburg, Bremen |
+| `bayern` (Bavaria) | Munich, Nuremberg, Augsburg |
+| `nordrhein-westfalen` | Cologne, Düsseldorf, Dortmund, Essen, Duisburg, Bonn, Münster |
+| `hessen` | Frankfurt, Wiesbaden |
+| `baden-wuerttemberg` | Stuttgart, Karlsruhe, Freiburg, Mannheim |
+| `sachsen` (Saxony) | Dresden, Leipzig, Chemnitz |
+| `niedersachsen` (Lower Saxony) | Hannover, Braunschweig |
+| `brandenburg` | Potsdam |
+| `rheinland-pfalz` | Mainz |
+| `sachsen-anhalt` | Halle, Magdeburg |
+| `thueringen` | Erfurt |
+| `schleswig-holstein` | Kiel, Lübeck |
+| `mecklenburg-vorpommern` | Rostock |
+| `saarland` | Saarbrücken |
+
+Non-city-state entries carry an explicit `bbox` (`ST_MakeEnvelope(...)`) so
+`import_osm.py` clips the state-wide PBF down to just that city before
+tag-filtering — importing all of Bavaria to get Munich's parking spots
+would be wasteful. `backend/scripts/import_all.py` runs the import for
+every seeded city in one pass. The full coordinate list is the source of
+truth in `supabase/migrations/004_add_german_cities.sql` — not duplicated
+here to avoid drift.
 
 ### `parking_spots`
 
@@ -227,6 +295,10 @@ python backend/scripts/import_osm.py --city berlin
 
 Adding a new city: insert a row into `cities` with the Geofabrik URL, then run the script with the new slug. No code changes needed.
 
+To import every seeded city in one pass (used for the 30+ cities added by
+`004_add_german_cities.sql`), run `python backend/scripts/import_all.py`
+instead of calling `import_osm.py` once per city.
+
 ---
 
 ## Cloudflare R2: PMTiles Setup
@@ -250,22 +322,74 @@ No request signing required; R2 public bucket serves files directly. Zero per-re
 
 ---
 
+## Routing infra
+
+*(Not in the original spec — added post-MVP to support the map module's
+in-app directions feature. See `SPEC-map.md` § Routing for the client-side
+contract.)*
+
+The FastAPI `api` service proxies routing requests to a **self-hosted**
+OSRM instance rather than a third-party routing API, keeping per-call cost
+at zero — consistent with the project's hard cost constraint. This is the
+one piece of infra that runs as a standing Docker Compose stack rather than
+a managed service.
+
+**`docker-compose.yml` services:**
+
+| Service | Role |
+|---|---|
+| `osrm-init` | One-shot: downloads the Germany-wide Geofabrik PBF, runs `osrm-extract` → `osrm-partition` → `osrm-customize`, writes a `.osrm_ready` sentinel to a shared volume. First run takes several hours; subsequent restarts skip it. |
+| `osrm-germany` | Runs `osrm-routed --algorithm mld` against the preprocessed data. No host port — only reachable by `api` on the internal Compose network. Waits on `osrm-init`'s successful completion. |
+| `caddy` | Terminates TLS for `api.freipark.com` (see `Caddyfile`) and reverse-proxies to `api:8000`. Automatic HTTPS — no manual cert management. |
+| `api` | The FastAPI backend. Waits on `osrm-germany`'s healthcheck before starting; exposes `OSRM_GERMANY_URL` so `backend/routers/regions.py` can reach it. |
+
+**Region dispatch:** `backend/routers/regions.py` maps a destination
+coordinate to an OSRM instance by bounding box. Today there is exactly one
+`Region` (`germany`), but the pattern is designed to add more without
+touching `route.py` — append a `Region(...)` entry and set its
+`OSRM_<NAME>_URL` env var.
+
+**Rate limiting:** `/route` is limited to 30 requests/minute per IP via
+`slowapi`, protecting the self-hosted OSRM instance (which has no external
+rate limiting of its own) from abuse.
+
+**Operational note:** the OSRM preprocessing step (`osrm-init`) is heavy —
+full Germany extraction, partitioning, and customization takes hours on
+first run and produces a multi-GB dataset on the `osrm_data` volume. This
+is a real infra cost (disk + one-time compute), even though it's not a
+*per-call* cost — worth knowing before spinning up a fresh environment.
+
+---
+
 ## Environment Variables
 
 ### `backend/.env.example`
 
 ```bash
-# Supabase
+# Supabase — get these from app.supabase.com → Settings → API
 SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key>   # bypasses RLS; server-side only, never expose
+SUPABASE_SERVICE_ROLE_KEY=<secret-key>   # bypasses RLS — backend only, never expose
 
-# Direct DB connection (for OSM import script using asyncpg/psycopg2)
-DATABASE_URL=postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
+# Supabase connection pooler (Transaction mode) — use this, not the direct connection
+# Format: postgresql://postgres.<project-ref>:<db-password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.<project-ref>:<db-password>@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
 
 # App
-ENVIRONMENT=development   # 'development' | 'production'
+ENVIRONMENT=development   # development | production
 LOG_LEVEL=info
 ```
+
+> **Corrected:** the original draft of this section showed a direct
+> (non-pooled) `DATABASE_URL`. The actual `.env.example` uses Supabase's
+> Transaction-mode connection **pooler** instead — Supabase's free tier
+> caps direct connections at 10, and the pooler avoids exhausting that
+> limit under concurrent import/API load.
+>
+> `OSRM_GERMANY_URL` (read by `backend/routers/regions.py`) is **not** a
+> backend `.env` variable — it's set by `docker-compose.yml`'s
+> `environment:` block, defaulting to `http://osrm-germany:5000` (the
+> in-network Compose service name). Only override it if running the API
+> outside Docker Compose.
 
 ### `frontend/.env.example`
 
@@ -276,7 +400,15 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 
 # Map tiles (per-city PMTiles URL)
 EXPO_PUBLIC_PMTILES_URL=https://pub-<hash>.r2.dev/berlin.pmtiles
+
+# FastAPI backend (routing proxy — see § Routing infra)
+EXPO_PUBLIC_API_URL=https://api.freipark.com
 ```
+
+> `EXPO_PUBLIC_API_URL` was added to `useRoute.ts` when the routing feature
+> shipped, but `frontend/.env.example` was never updated to match — a
+> `CLAUDE.md` rule violation this reconciliation fixes (see the
+> `frontend/.env.example` diff and `SPEC-map.md`'s tech stack table).
 
 **Never commit:** Actual `.env` files, `SERVICE_ROLE_KEY`, `DATABASE_URL` with credentials.
 
@@ -287,38 +419,61 @@ EXPO_PUBLIC_PMTILES_URL=https://pub-<hash>.r2.dev/berlin.pmtiles
 Supabase client singleton (frontend pattern used across all modules):
 
 ```typescript
-// src/lib/supabase.ts
-import { createClient } from '@supabase/supabase-js'
-import type { Database } from './database.types'  // generated by: supabase gen types typescript
+// src/lib/supabase.ts — actual implementation, not the originally-planned generated-types version
+import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl  = process.env.EXPO_PUBLIC_SUPABASE_URL!
-const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnon)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
 ```
 
-Backend DB query (Pydantic + asyncpg pattern):
+> **Corrected:** the original draft called for `supabase gen types
+> typescript` generated types (`createClient<Database>(...)`). That was
+> never implemented — `SpotRow` and friends are hand-written in
+> `src/lib/types.ts` instead. Worth revisiting once the schema stabilizes
+> further, but not a blocker for anything today.
+>
+> Note the `auth:` config block (`AsyncStorage` session persistence,
+> auto-refresh) is already wired even though no auth UI exists — this is
+> the one piece of groundwork already laid for the future `auth` module.
+
+Backend request/response models (Pydantic, inline in each router — see
+§ Project Structure note on `backend/models/` not existing as a separate
+directory):
 
 ```python
-# models/spot.py
-from pydantic import BaseModel, UUID4
-from typing import Literal
+# backend/routers/route.py — actual pattern in use
+from pydantic import BaseModel, Field, model_validator
 
-class ParkingSpot(BaseModel):
-    id: UUID4
-    city_id: UUID4
-    osm_id: int
-    spot_type: Literal['street', 'garage', 'lot', 'zone']
-    access: Literal['free', 'paid', 'permit', 'private'] | None
-    operator: str | None
-    capacity: int | None
-    lat: float
-    lon: float
+class RouteParams(BaseModel):
+    from_lon: float = Field(..., ge=-180, le=180)
+    from_lat: float = Field(..., ge=-90, le=90)
+    to_lon:   float = Field(..., ge=-180, le=180)
+    to_lat:   float = Field(..., ge=-90, le=90)
+
+    @model_validator(mode="after")
+    def destination_in_region(self) -> "RouteParams":
+        ...  # validates the destination falls inside a known Region
+
+class RouteResponse(BaseModel):
+    geometry: dict
+    distance_m: float
+    duration_s: float
+    region: str
 ```
 
 **Conventions:**
 - No `any` types in TypeScript; no untyped dicts in Python (strict Pydantic)
-- Database types generated via `supabase gen types typescript` — never hand-written
 - All SQL in `supabase/migrations/` as numbered files (`001_`, `002_`, ...); no ad-hoc schema changes
 - Migration files are append-only; never edit a migration that has been pushed to the project
 
@@ -328,37 +483,62 @@ class ParkingSpot(BaseModel):
 
 **Framework:** pytest (backend), Jest + React Native Testing Library (frontend)
 
-**Infra-specific tests** (`backend/tests/test_db.py`):
+**Infra-specific tests** (`backend/tests/test_db.py` — actual implementation
+uses synchronous `psycopg2`, not the `asyncpg`/`await db.fetchval(...)` style
+originally sketched here; the RLS test also checks policy metadata directly
+rather than attempting a live anon insert, which is more robust against
+network/auth setup differences):
 
 ```python
-# Verify PostGIS extension
-async def test_postgis_enabled():
-    result = await db.fetchval("SELECT PostGIS_version()")
-    assert result is not None
+def test_postgis_enabled(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT PostGIS_Version()")
+        version = cur.fetchone()[0]
+    assert version, "PostGIS_Version() returned empty — extension not installed"
 
-# Verify Berlin seed row exists
-async def test_berlin_city_seeded():
-    row = await db.fetchrow("SELECT slug FROM cities WHERE slug = 'berlin'")
-    assert row is not None
 
-# Verify spatial index is used for nearest-spot queries
-async def test_spatial_index_on_location():
-    plan = await db.fetchval("""
-        EXPLAIN SELECT id FROM parking_spots
-        ORDER BY location <-> ST_MakePoint(13.405, 52.52)::geometry
-        LIMIT 10
-    """)
-    assert 'Index Scan' in plan
+def test_berlin_seed_exists(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT slug, name, country_code FROM cities WHERE slug = 'berlin'")
+        row = cur.fetchone()
+    assert row == ("berlin", "Berlin", "DE")
 
-# Verify RLS: anon key can SELECT, cannot INSERT
-async def test_rls_read_only_for_anon():
-    rows = await anon_client.table('parking_spots').select('id').limit(1).execute()
-    assert rows.data is not None
-    with pytest.raises(Exception, match='new row violates'):
-        await anon_client.table('parking_spots').insert({...}).execute()
+
+def test_spatial_index_used(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute("""
+            EXPLAIN (FORMAT TEXT)
+            SELECT id FROM parking_spots
+            ORDER BY location <-> ST_SetSRID(ST_MakePoint(13.4050, 52.5200), 4326)
+            LIMIT 10
+        """)
+        plan = "\n".join(row[0] for row in cur.fetchall())
+    assert "Index Scan" in plan, f"Expected KNN index scan, got:\n{plan}"
+
+
+def test_rls_blocks_anon_insert(db_conn):
+    with db_conn.cursor() as cur:
+        cur.execute("""
+            SELECT relrowsecurity FROM pg_class
+            WHERE oid = 'public.parking_spots'::regclass
+        """)
+        assert cur.fetchone()[0] is True, "RLS not enabled on parking_spots"
+
+        cur.execute("""
+            SELECT count(*) FROM pg_policies
+            WHERE schemaname = 'public' AND tablename = 'parking_spots'
+              AND cmd IN ('INSERT', 'ALL')
+              AND (roles @> ARRAY['anon'::name] OR roles @> ARRAY['public'::name])
+        """)
+        assert cur.fetchone()[0] == 0, "Unexpected INSERT/ALL policy grants anon write access"
 ```
 
 **Infra tests run against the local Supabase dev instance** (`supabase start`). No database mocking — a mocked schema would not catch RLS policy errors or missing indexes.
+
+**Gap:** there are no tests covering the multi-city seed
+(`004_add_german_cities.sql`) or the routing infra (`route.py`,
+`regions.py`) — only the original Berlin-scoped checks exist. Worth adding
+if routing correctness becomes a source of bugs.
 
 ---
 
@@ -376,7 +556,11 @@ async def test_rls_read_only_for_anon():
 - Changing RLS policies (security-critical)
 - Upgrading PostGIS or Supabase CLI version
 - Adding a new `EXPO_PUBLIC_*` env var (becomes part of public app build)
-- Adding a second city's data (requires deciding on multi-city frontend UX first)
+- Adding more cities beyond the 30+ already seeded (§ Seeded Cities) — the
+  original "ask first" gate here was about the *first* expansion past
+  Berlin, which has already happened; further growth should still be a
+  deliberate call (import runtime, R2/tile coverage, OSRM dataset size all
+  scale with city count)
 
 **Never:**
 - Commit `.env` files or any file containing actual secrets
@@ -443,16 +627,16 @@ Privacy note: motion events are PII-adjacent. Phase 3 requires a consent flow, d
 
 ## Success Criteria
 
-- [ ] Supabase project exists; PostGIS extension enabled; `cities` and `parking_spots` tables created with all indexes and RLS policies
-- [ ] `supabase/migrations/001_initial_schema.sql` committed and applied via `supabase db push`
-- [ ] Berlin seed row present in `cities` table (`slug = 'berlin'`)
-- [ ] RLS tests pass: anonymous client can SELECT; INSERT is denied; service role bypasses RLS
-- [ ] Spatial index test passes: nearest-spot query uses `Index Scan`, not `Seq Scan`
-- [ ] Cloudflare R2 bucket `freipark-tiles` created; `berlin.pmtiles` uploaded; CORS configured; public URL resolves
-- [ ] `backend/.env.example` and `frontend/.env.example` committed with all required variables documented
-- [ ] OSM import script runs end-to-end: `python import_osm.py --city berlin` downloads PBF, filters parking features, inserts rows via upsert-by-`osm_id`, logs row count
-- [ ] At least one spot record queryable via `GET /health/db` returning spot count > 0
-- [ ] No secrets in git history (`git log -p | grep -i 'supabase\|key\|password'` returns nothing)
+- [x] Supabase project exists; PostGIS extension enabled; `cities` and `parking_spots` tables created with all indexes and RLS policies
+- [x] `supabase/migrations/001_initial_schema.sql` committed and applied via `supabase db push`
+- [x] Berlin seed row present in `cities` table (`slug = 'berlin'`) — and 30+ more cities via `004_add_german_cities.sql` (§ Seeded Cities)
+- [x] RLS tests pass: anonymous client can SELECT; INSERT is denied; service role bypasses RLS
+- [x] Spatial index test passes: nearest-spot query uses `Index Scan`, not `Seq Scan`
+- [x] Cloudflare R2 bucket `freipark-tiles` created; `berlin.pmtiles` uploaded; CORS configured; public URL resolves
+- [x] `backend/.env.example` and `frontend/.env.example` committed with all required variables documented (this reconciliation closed a gap — `EXPO_PUBLIC_API_URL` was missing until now)
+- [x] OSM import script runs end-to-end: `python import_osm.py --city berlin` downloads PBF, filters parking features, inserts rows via upsert-by-`osm_id`, logs row count — plus `import_all.py` for every seeded city
+- [x] At least one spot record queryable via `GET /health/db` returning spot count > 0 — **shape evolved**: the endpoint now returns `{status, total_spots, cities: [{city, spot_count}, ...]}` (aggregated across all seeded cities), not the single `{status, spot_count, city}` shape originally sketched in `tasks/plan.md` T6a
+- [x] No secrets in git history — the original literal check (`git log -p | grep -i 'supabase\|key\|password'`) is too broad to pass on this repo (it matches env var *names* and this doc's own prose); re-verified 2026-08-23 with a pattern targeting actual credential values (`SUPABASE_SERVICE_ROLE_KEY=<real-looking-value>`, live `DATABASE_URL` with a password) — no matches
 
 ---
 
