@@ -10,6 +10,7 @@ import { SpotLayer } from './SpotLayer';
 import { RouteLayer } from './RouteLayer';
 import { SearchBar } from './SearchBar';
 import { SpotDetailSheet } from './SpotDetailSheet';
+import { AccountButton } from '../auth/AccountButton';
 import type { GeoResult } from './useGeocoder';
 import type { SpotRow } from '../../lib/types';
 
@@ -136,6 +137,7 @@ export function MapScreen() {
       </Map>
 
       <SearchBar onSelect={handleGeoSelect} />
+      <AccountButton />
 
       {locationLoading && !locationDenied && (
         <View style={styles.locatingChip} pointerEvents="none">

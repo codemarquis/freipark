@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 56,
     left: 12,
-    right: 12,
+    right: 96,
     zIndex: 10,
   },
   inputRow: {

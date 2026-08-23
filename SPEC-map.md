@@ -347,10 +347,14 @@ across feature boundaries except through `src/lib/`.
 ## Testing Strategy
 
 **Unit tests** (`jest-expo` + `@testing-library/react-native` v14 — note:
-`render()`/`renderHook()` are `async` in v14; every call site must `await`
-them, and fake-timer tests should prefer `jest.advanceTimersByTimeAsync`
-over `advanceTimersByTime` + a separate `act()` flush, which was a source
-of test-order flakiness):
+`render()`/`renderHook()` — including `renderHook`'s returned `unmount()`
+— are `async` in v14; every call site must `await` them, and fake-timer
+tests should prefer `jest.advanceTimersByTimeAsync` over
+`advanceTimersByTime` + a separate `act()` flush, which was a source of
+test-order flakiness. `fireEvent.changeText`/`fireEvent.press` are also
+async in this version — see `SPEC-auth.md` § Testing Strategy, found while
+building the auth module; no map test uses `fireEvent` yet, but the next
+one that does will hit this):
 - `geo.test.ts` — bbox conversion helpers (pure functions, full coverage)
 - `useSpots.test.ts` — mock Supabase client; assert query params and
   GeoJSON shape returned by the hook

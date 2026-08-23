@@ -374,3 +374,122 @@ repeated here): no automated tests for search/routing/multi-city; the
 original single-city success criterion being updated until this
 reconciliation; `frontend/.env.example` was missing `EXPO_PUBLIC_API_URL`
 until this reconciliation fixed it.
+
+---
+---
+
+# Implementation Plan: auth module
+
+**Spec:** [SPEC-auth.md](../SPEC-auth.md)
+**Module:** `auth`
+**Build position:** Third — depends on `infra` (Supabase Auth already provisioned; AsyncStorage session persistence already wired in `src/lib/supabase.ts`). Independent of `map` beyond one new UI entry point.
+
+> **Status (2026-08-23):** A1–A5 implemented and passing `npx tsc --noEmit`
+> and `npx jest --coverage` (64/64 tests, `useAuth.ts` 100% stmts/lines,
+> 90% branches — exceeds the 80% target). Checkboxes below reflect
+> **code-complete + automated-verified**, not manual/device verification —
+> anything requiring a running simulator or the real Supabase project
+> (session persistence across force-quit, actual sign-up against the live
+> project, visual layout check) is called out explicitly as still
+> outstanding. Also touched `SearchBar.tsx` (narrowed its right margin from
+> `12` to `96`) to make room for `AccountButton` without overlap — not in
+> the original file list, disclosed here for the same reason.
+
+---
+
+## Dependency Graph
+
+```
+[A1] useAuth hook ──→ [A2] AuthSheet UI ──┐
+                   └──→ [A3] AccountButton ┤──→ [A4] Wire into MapScreen ──→ [A5] Tests
+```
+
+A1 is the critical path — A2 and A3 both consume it. A4 is a small, low-risk change to an already-working screen.
+
+---
+
+## Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Email confirmation setting unknown (see `SPEC-auth.md` § Open Questions) | Medium | `useAuth`/`AuthSheet` handle the `session === null` post-signup case regardless of which way the project is configured |
+| `@testing-library/react-native` v14 async gotchas (already hit once in the map module) | Low — now known | Write tests with `await render()`/`renderHook()` from the start; use `advanceTimersByTimeAsync` if any fake timers are needed |
+| `onAuthStateChange` subscription leak if not unsubscribed on unmount | Medium | Explicit cleanup in `useAuth`'s `useEffect`; covered by a dedicated test assertion |
+
+---
+
+## Tasks
+
+### A1 — `useAuth` hook
+
+- [x] **A1: Implement `src/features/auth/useAuth.ts`**
+  - Acceptance: exposes `{ session, user, loading, signUp, signIn, signOut }`;
+    calls `supabase.auth.getSession()` once on mount, subscribes to
+    `onAuthStateChange`, unsubscribes on unmount; `signUp`/`signIn` return
+    `{ error: string | null }` so `AuthSheet` can show inline errors without
+    throwing
+  - Verify: `npx tsc --noEmit` passes; manual — hook reflects real Supabase
+    session state
+  - Files: `frontend/src/features/auth/useAuth.ts`
+
+### A2 — `AuthSheet` UI
+
+- [x] **A2: Implement `src/features/auth/AuthSheet.tsx`** — manual simulator test of both tabs/paths still outstanding
+  - Acceptance: sign-in/sign-up tab toggle; email + password fields; inline
+    client-side validation (email shape, password length) before calling
+    `useAuth`; inline server error display; signed-in state shows email +
+    "Sign Out"; closes automatically on successful sign-in
+  - Verify: manual simulator test of both tabs, both success and error paths
+  - Files: `frontend/src/features/auth/AuthSheet.tsx`
+
+### A3 — `AccountButton`
+
+- [x] **A3: Implement `src/features/auth/AccountButton.tsx`** — manual state-transition check still outstanding
+  - Acceptance: neutral/loading state while `useAuth().loading`; "Sign in"
+    pill when signed out; compact signed-in indicator when signed in; tap
+    opens `AuthSheet`
+  - Verify: manual — button state matches `useAuth` state through all
+    transitions
+  - Files: `frontend/src/features/auth/AccountButton.tsx`
+
+### A4 — Wire into `MapScreen`
+
+- [x] **A4: Render `<AccountButton />` in `MapScreen.tsx`** — `npx tsc --noEmit` clean and all pre-existing map tests still pass unchanged; manual simulator check across map states (location loading/denied, search open, spot sheet open) with the new button present is still outstanding
+  - Acceptance: button visible alongside `SearchBar`, doesn't overlap it or
+    other existing UI (locating chip, location banner, attribution); every
+    existing map success criterion (`SPEC-map.md`) still passes signed-out
+  - Verify: `npx tsc --noEmit` passes; manual simulator check across all
+    existing map states (location loading/denied, search open, spot sheet
+    open) with the new button present
+  - Files: `frontend/src/features/map/MapScreen.tsx`
+
+### A5 — Tests
+
+- [x] **A5: `useAuth.test.ts` and `AuthSheet.test.tsx`** — both hit the same
+  `@testing-library/react-native` v14 async gotchas the map module hit
+  (`renderHook`'s `result`/`unmount` are async; **`fireEvent.changeText`
+  and `fireEvent.press` are also async in this version — a gotcha not yet
+  in `SPEC-auth.md`'s risk table, worth adding**). `useAuth.ts`: 100%
+  stmts/lines/funcs, 90% branches. `AuthSheet.tsx`: 92%/86%/88% — well
+  past the "snapshot-level" bar the spec set, since behavioral tests were
+  cheap to write given the mocked-hook pattern. `AccountButton.tsx` has no
+  dedicated test file, matching the existing codebase's own precedent
+  (`SearchBar.tsx` also has none) for small presentational trigger
+  components — not a gap, a deliberate consistency call.
+  - Files: `frontend/__tests__/useAuth.test.ts`, `frontend/__tests__/AuthSheet.test.tsx`
+
+---
+
+## Completion Checklist
+
+All eight success criteria from `SPEC-auth.md` — **automated portion
+verified; live/manual portion still outstanding, see below**:
+
+- [ ] Sign up creates an account (handles both immediate-session and email-confirmation-required cases) — **outstanding: needs a run against the real Supabase project**; code path for both cases is implemented and unit-tested
+- [ ] Sign in with valid credentials succeeds; `AccountButton` reflects it — **outstanding: same, needs a live run**
+- [x] Sign in with invalid credentials shows inline error, no crash — verified via `AuthSheet.test.tsx`'s mocked-failure case; real-project error copy may differ from the mocked string, worth a spot-check
+- [ ] Sign out clears session; `AccountButton` reverts — **outstanding: needs a live run**; unit-tested against a mocked `signOut`
+- [ ] Session persists across force-quit + relaunch (manual device test) — **outstanding**, explicitly a manual-only criterion per the spec
+- [x] Every existing `SPEC-map.md` criterion still passes signed-out — all 45 pre-existing tests still pass unchanged; `npx tsc --noEmit` clean; visual/manual re-check of the new button's placement still outstanding
+- [x] `npx jest` passes; `useAuth.ts` ≥ 80% coverage — 64/64 passing, `useAuth.ts` at 100%/90%
+- [x] No backend/database changes — diff is `SPEC-auth.md`, `tasks/plan.md`, `frontend/src/features/auth/` (new), `frontend/__tests__/useAuth.test.ts` + `AuthSheet.test.tsx` (new), `MapScreen.tsx`, and `SearchBar.tsx` (both small, disclosed touches) — no `backend/` or `supabase/migrations/` changes
