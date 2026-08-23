@@ -2,6 +2,13 @@
   "name": "freipark",
   "version": "1.0.0",
   "main": "index.ts",
+  "jest": {
+    "preset": "jest-expo",
+    "testMatch": ["**/__tests__/**/*.(ts|tsx)"],
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@gorhom|@maplibre|protomaps-themes-base|pmtiles)"
+    ]
+  },
   "dependencies": {
     "@gorhom/bottom-sheet": "^5.2.14",
     "@maplibre/maplibre-react-native": "^11.3.6",
@@ -12,6 +19,7 @@
     "expo-linking": "~57.0.7",
     "expo-location": "~57.0.12",
     "expo-status-bar": "~57.0.1",
+    "jest-expo": "~57.0.4",
     "pmtiles": "^4.5.0",
     "protomaps-themes-base": "^4.5.0",
     "react": "19.2.3",
@@ -21,6 +29,8 @@
     "react-native-url-polyfill": "^4.0.0"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3"
   },

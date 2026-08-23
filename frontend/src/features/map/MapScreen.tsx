@@ -126,7 +126,7 @@ export function MapScreen() {
           minZoom={5.5}
           maxBounds={[4.5, 46.5, 15.1, 55.1]}
         />
-        {!locationDenied && <UserLocation visible />}
+        {!locationDenied && <UserLocation />}
         <RouteLayer geometry={route.data?.geometry ?? null} />
         <SpotLayer
           geojson={geojson}
