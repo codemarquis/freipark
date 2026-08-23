@@ -10,6 +10,7 @@ interface AuthState {
 
 interface AuthResult {
   error: string | null;
+  code: string | null;
 }
 
 export function useAuth() {
@@ -37,17 +38,17 @@ export function useAuth() {
 
   async function signUp(email: string, password: string): Promise<AuthResult> {
     const { error } = await supabase.auth.signUp({ email, password });
-    return { error: error?.message ?? null };
+    return { error: error?.message ?? null, code: error?.code ?? null };
   }
 
   async function signIn(email: string, password: string): Promise<AuthResult> {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    return { error: error?.message ?? null, code: error?.code ?? null };
   }
 
   async function signOut(): Promise<AuthResult> {
     const { error } = await supabase.auth.signOut();
-    return { error: error?.message ?? null };
+    return { error: error?.message ?? null, code: error?.code ?? null };
   }
 
   return { ...state, signUp, signIn, signOut };

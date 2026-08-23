@@ -87,7 +87,7 @@ describe('useAuth', () => {
     const outcome = await result.current.signUp('a@b.com', 'password123');
 
     expect(mockSignUp).toHaveBeenCalledWith({ email: 'a@b.com', password: 'password123' });
-    expect(outcome).toEqual({ error: null });
+    expect(outcome).toEqual({ error: null, code: null });
   });
 
   it('signUp surfaces the Supabase error message on failure', async () => {
@@ -97,7 +97,20 @@ describe('useAuth', () => {
 
     const outcome = await result.current.signUp('a@b.com', 'password123');
 
-    expect(outcome).toEqual({ error: 'User already registered' });
+    expect(outcome).toEqual({ error: 'User already registered', code: null });
+  });
+
+  it('signUp surfaces the error code so callers can distinguish duplicate-account signups', async () => {
+    mockSignUp.mockResolvedValue({
+      data: {},
+      error: { message: 'User already registered', code: 'user_already_exists' },
+    });
+    const { result } = await renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const outcome = await result.current.signUp('a@b.com', 'password123');
+
+    expect(outcome).toEqual({ error: 'User already registered', code: 'user_already_exists' });
   });
 
   it('signIn calls supabase.auth.signInWithPassword and returns no error on success', async () => {
@@ -111,7 +124,7 @@ describe('useAuth', () => {
       email: 'a@b.com',
       password: 'password123',
     });
-    expect(outcome).toEqual({ error: null });
+    expect(outcome).toEqual({ error: null, code: null });
   });
 
   it('signIn surfaces the Supabase error message on failure', async () => {
@@ -124,7 +137,7 @@ describe('useAuth', () => {
 
     const outcome = await result.current.signIn('a@b.com', 'wrong');
 
-    expect(outcome).toEqual({ error: 'Invalid login credentials' });
+    expect(outcome).toEqual({ error: 'Invalid login credentials', code: null });
   });
 
   it('signOut calls supabase.auth.signOut and returns no error on success', async () => {
@@ -135,6 +148,6 @@ describe('useAuth', () => {
     const outcome = await result.current.signOut();
 
     expect(mockSignOut).toHaveBeenCalledTimes(1);
-    expect(outcome).toEqual({ error: null });
+    expect(outcome).toEqual({ error: null, code: null });
   });
 });

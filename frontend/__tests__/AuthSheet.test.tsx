@@ -135,6 +135,23 @@ describe('signed out', () => {
     );
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('does not reveal that an email is already registered (user enumeration)', async () => {
+    signUp.mockResolvedValue({
+      error: 'User already registered',
+      code: 'user_already_exists',
+    });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Sign Up'));
+    await fillAndSubmit('a@b.com', 'password123');
+
+    await waitFor(() =>
+      expect(screen.getByText('Check your email to confirm your account.')).toBeTruthy(),
+    );
+    expect(screen.queryByText('User already registered')).toBeNull();
+    expect(screen.queryByText(/already registered/i)).toBeNull();
+  });
 });
 
 describe('signed in', () => {

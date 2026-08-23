@@ -99,13 +99,23 @@ const { data, error } = await supabase.auth.signUp({ email, password });
 - Client-side validation before calling: valid email shape, password ≥ 6
   chars (Supabase's own default minimum — don't hardcode a stricter rule
   without checking the project's actual configured minimum first).
-- On success: if the project requires email confirmation (see § Open
-  Questions — unverified from this environment), `data.session` will be
-  `null` until the user confirms; `AuthSheet` must handle that case with a
-  "check your email" message rather than assuming an immediate session.
-- On error: show the message from `error.message` inline in the form
-  (Supabase's errors are already user-presentable, e.g. "User already
-  registered").
+- **Confirmed 2026-08-23 (real signup, real inbox): this project requires
+  email confirmation.** `data.session` is `null` until the user confirms;
+  `AuthSheet` handles that with a "check your email" message.
+- On error: show `error.message` inline — **except** when
+  `error.code` is `user_already_exists` or `email_exists` (Supabase's code
+  for "this email already has an account"). That specific case is
+  deliberately **not** shown to the user — surfacing "User already
+  registered" is a user-enumeration vector (an attacker can probe arbitrary
+  emails to learn which ones have FreiPark accounts). Instead `AuthSheet`
+  shows the exact same "check your email to confirm your account" message
+  a genuine new signup gets, so the response is indistinguishable either
+  way. This is why `useAuth`'s `AuthResult` carries a stable `code` field
+  alongside `error` — keying off Supabase's `code` is robust; keying off
+  the human-readable `message` string would not be.
+- Sign-**in** does not have this problem: Supabase's `signInWithPassword`
+  already returns a generic "Invalid login credentials" for both "no such
+  user" and "wrong password", so it's shown as-is.
 
 ### Sign in
 
@@ -261,6 +271,11 @@ instead, as with every other Supabase call in this codebase.
 - Store passwords or tokens anywhere outside Supabase's own session
   storage (AsyncStorage, already configured) — no custom token handling
 - Roll a custom JWT verification path — Supabase's SDK handles this
+- Let any auth flow's response distinguish "this email has an account"
+  from "it doesn't" — a user-enumeration vector. Sign-up already handles
+  this (see § Auth Flows); apply the same principle if password reset is
+  ever built — "if that email has an account, we sent a reset link" reads
+  identically whether it does or not.
 
 ---
 
@@ -268,7 +283,12 @@ instead, as with every other Supabase call in this codebase.
 
 1. Signing up with a new email/password creates an account (verify: user
    appears in Supabase Auth dashboard, or, if email confirmation is on,
-   the "check your email" state shows correctly)
+   the "check your email" state shows correctly). **Currently blocked
+   end-to-end** — the "check your email" UI state itself is confirmed
+   correct, but the confirmation link Supabase emails points at
+   `localhost:3000` and fails (§ Open Questions), so no one can actually
+   complete a signup against the real project right now until the
+   dashboard's Site URL is fixed.
 2. Signing in with valid credentials succeeds; `AccountButton` reflects
    signed-in state
 3. Signing in with wrong credentials shows a clear inline error, no crash
@@ -289,7 +309,9 @@ instead, as with every other Supabase call in this codebase.
 
 | Question | Status |
 |---|---|
-| Does the Supabase project currently require email confirmation before first sign-in? | **Unverified from this environment** — couldn't reach the linked project's Auth dashboard settings (local `supabase status` failed: no Docker daemon running, and dashboard-level Auth config isn't visible via the CLI's local commands). `AuthSheet` must handle both cases gracefully regardless; confirm the actual setting before relying on either sign-up path in manual testing. |
-| Password reset — build now or defer? | **Recommend defer.** Real scope: `app.json` URI scheme + deep-link handling for the reset redirect, which is its own small effort. Flagging so it's a deliberate follow-up, not a silent gap. |
+| Does the Supabase project currently require email confirmation before first sign-in? | **Resolved 2026-08-23 — yes**, confirmed by an actual signup against the real project (a confirmation email arrived). Superseded the earlier "unverified from this environment" note. |
+| **New 2026-08-23:** the confirmation email's link is broken. | **Confirmed bug, not yet fixed.** The link points to `redirect_to=http://localhost:3000` — the Supabase project's **Site URL** (Authentication → URL Configuration in the dashboard) is still the default placeholder from project creation, and FreiPark has no web frontend for it to resolve to. This is dashboard config, not app code — someone with Supabase dashboard access needs to point Site URL at either (a) a minimal static "confirmed, return to the app" page (quick, no app changes), or (b) a proper `freipark://` deep link, which requires the same `app.json` URI-scheme work as the password-reset item below. Until fixed, **no one can actually complete signup** — this blocks the "Sign up creates an account" success criterion end-to-end, not just the UX polish of it. |
+| **New 2026-08-23:** confirmation emails are sent from Supabase's own address, not freipark.com. | **Known limitation, not yet fixed.** Fixing it requires configuring custom SMTP (Authentication → Emails → SMTP Settings) through a transactional provider (Resend/Postmark/SendGrid/SES) with a domain-verified sender for freipark.com (SPF + DKIM DNS records). Also raises Supabase's default shared-sender rate limit, which will matter at real usage volume regardless of branding. Dashboard + DNS work, not app code. |
+| Password reset — build now or defer? | **Still deferred.** Real scope: `app.json` URI scheme + deep-link handling for the reset redirect — the same infrastructure the broken confirmation-email redirect above needs. Worth doing both together if/when this gets built, rather than twice. |
 | Any profile data beyond `auth.users` (display name, avatar)? | **Deferred — no.** Nothing in the app consumes profile data yet; adding a `profiles` table now would be speculative. Revisit when Phase 2 (`spot_reports`) needs to display "reported by X". |
-| Where exactly does `AccountButton` sit visually relative to `SearchBar`? | **Not blocking — implementation detail**, finalize during Phase 4 (Implement) against the real screen layout. |
+| Where exactly does `AccountButton` sit visually relative to `SearchBar`? | **Resolved** — confirmed correct via live simulator screenshot 2026-08-23, no overlap. |

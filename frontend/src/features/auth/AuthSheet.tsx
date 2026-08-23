@@ -71,6 +71,13 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
     setSubmitting(false);
 
     if (result.error) {
+      // Sign-up must never reveal whether the email is already registered —
+      // that's a user-enumeration vector. Show the same generic message a
+      // genuine new signup gets instead of Supabase's "already registered".
+      if (mode === 'signup' && (result.code === 'user_already_exists' || result.code === 'email_exists')) {
+        setInfo('Check your email to confirm your account.');
+        return;
+      }
       setError(result.error);
       return;
     }
