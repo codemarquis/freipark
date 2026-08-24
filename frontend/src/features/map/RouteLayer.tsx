@@ -17,6 +17,7 @@ export function RouteLayer({ geometry }: RouteLayerProps) {
       <Layer
         id="route-line"
         type="line"
+        source="route"
         paint={{
           'line-color': '#6366f1',
           'line-width': 5,

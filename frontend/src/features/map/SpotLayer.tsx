@@ -11,6 +11,15 @@ import type {
 } from '@maplibre/maplibre-react-native';
 import type { SpotsGeoJSON } from '../../lib/geo';
 import type { SpotRow } from '../../lib/types';
+import { FONT_RENAME } from '../../lib/fonts';
+
+// Mirrors MapScreen's glyphs-source switch (see SPEC-map.md § Glyph
+// Hosting) — this layer's own text-font reference isn't part of the
+// protomaps-themes-base style, so it needs the same space-free rename
+// applied independently once a custom (space-free) glyph host is set.
+const CLUSTER_COUNT_FONT = process.env.EXPO_PUBLIC_GLYPHS_URL
+  ? [FONT_RENAME['Noto Sans Regular']]
+  : ['Noto Sans Regular'];
 
 interface SpotLayerProps {
   geojson: SpotsGeoJSON;
@@ -53,6 +62,7 @@ export function SpotLayer({ geojson, onSpotPress, cameraRef }: SpotLayerProps) {
       <Layer
         id="spots-clusters"
         type="circle"
+        source="spots"
         filter={['has', 'point_count']}
         paint={{
           'circle-color': '#3b82f6',
@@ -63,10 +73,11 @@ export function SpotLayer({ geojson, onSpotPress, cameraRef }: SpotLayerProps) {
       <Layer
         id="spots-cluster-count"
         type="symbol"
+        source="spots"
         filter={['has', 'point_count']}
         layout={{
           'text-field': '{point_count_abbreviated}',
-          'text-font': ['Noto Sans Regular'],
+          'text-font': CLUSTER_COUNT_FONT,
           'text-size': 12,
         }}
         paint={{ 'text-color': '#ffffff' }}
@@ -74,6 +85,7 @@ export function SpotLayer({ geojson, onSpotPress, cameraRef }: SpotLayerProps) {
       <Layer
         id="spots-unclustered"
         type="circle"
+        source="spots"
         filter={['!', ['has', 'point_count']]}
         paint={{
           'circle-color': [

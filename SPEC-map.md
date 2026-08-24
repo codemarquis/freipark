@@ -191,6 +191,24 @@ JS overhead per frame).
 | `private` | Red | `#ef4444` |
 | `null` / unknown | Grey | `#94a3b8` |
 
+**Bug fixed 2026-08-24: `<Layer>` needs an explicit `source` prop in this
+library version.** `SpotLayer`/`RouteLayer` originally relied on JSX
+nesting inside `<GeoJSONSource>` to associate each `<Layer>` with its
+source — the pattern most `@rnmapbox/maps`-derived code assumes. In
+`@maplibre/maplibre-react-native` v11.3.6 that assumption is wrong:
+nesting alone renders nothing, no error, no warning — the data reaches
+`SpotLayer` correctly (confirmed via a temporary diagnostic log: 1000
+correctly-shaped features, valid coordinates, no fetch/transform issue)
+but the native layer never gets attached to its source. Fix: pass
+`source="spots"` (and `source="route"` in `RouteLayer`) explicitly,
+matching the library's own "Basic Usage" doc example. Confirmed on-device:
+clusters render with correct counts across Berlin, and update correctly
+on pan. `spots-cluster-count`'s own hardcoded `text-font` (a layer defined
+outside `protomapsLayers()`'s output, so untouched by the § Glyph Hosting
+rename) was also switched to key off `EXPO_PUBLIC_GLYPHS_URL` the same
+way, so it doesn't regress into the same corruption bug once the R2
+mirror goes live.
+
 ---
 
 ## Interactions

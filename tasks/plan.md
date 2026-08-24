@@ -638,3 +638,46 @@ access this environment doesn't have.
   Metro was restarted clean. The stale app session that surfaced the
   scope-correction error above was a leftover from *before* that
   cleanup — not a new regression.
+
+---
+---
+
+# Addendum: Climbing Error Counter & Missing Spots (2026-08-24)
+
+**Spec:** [SPEC-map.md](../SPEC-map.md) § Spot Visualisation
+
+- [x] **Error counter root cause:** the same stale-app-process issue as
+  the earlier glyph addendum, but this time I'd genuinely left an app
+  process running for ~3 hours after cleanup without terminating it —
+  a real gap in how I closed out that session. Confirmed via device
+  logs: exact text `Failed to load glyph range 8192-8447 for font stack
+  Noto Sans Regular:( Could not connect to the server.)`, request target
+  `http://localhost:8099/...` (my killed test server). Confirmed the
+  served Metro bundle had zero references to port 8099. Fix: terminate +
+  relaunch — zero glyph errors since.
+- [x] **Missing spots — real bug, found and fixed:** `useSpots`/Supabase
+  RPC/`SpotLayer` props were all confirmed correct via a temporary
+  diagnostic log (1000 valid features reaching `SpotLayer`). Root cause:
+  `SpotLayer.tsx`/`RouteLayer.tsx` relied on JSX nesting inside
+  `<GeoJSONSource>` to associate `<Layer>` with its source — wrong
+  assumption for `@maplibre/maplibre-react-native` v11.3.6, which needs
+  an explicit `source` prop (confirmed against the library's own doc
+  example). Fixed both files; confirmed on-device with correctly-counted
+  clusters across Berlin. Also fixed `spots-cluster-count`'s own
+  hardcoded spaced font reference (a second location with the § Glyph
+  Hosting bug, missed by the first pass since it's outside
+  `protomapsLayers()`'s output).
+  - Verify: `npx tsc --noEmit` clean; `npx jest` 85/85 passing; confirmed
+    live on a freshly-relaunched simulator, including after a pan-based
+    region change
+  - Files: `frontend/src/features/map/SpotLayer.tsx`,
+    `frontend/src/features/map/RouteLayer.tsx`
+- [x] **Diagnostic log removed** after use, as promised — not left in
+  the shipped code.
+- [ ] **Minor, non-blocking observation, not chased further:** on some
+  fresh launches, spot clusters take a few seconds to appear (or need a
+  pan/zoom to trigger) even after data has loaded — looks like a native
+  clustering-index computation delay on initial mount, not a data or
+  association bug (confirmed: correct once triggered, every time). Not
+  investigated further given time already spent; worth a look if it
+  turns out to bother real users.
