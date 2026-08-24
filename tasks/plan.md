@@ -526,3 +526,51 @@ just above it — had to drag the bubble away first. Worth a
 `/run-skill-generator` pass if simulator-driven verification becomes
 routine for this project; not done here since it was one adjacent to the
 main task, not part of it.
+
+---
+---
+
+# Addendum: Phone Auth, Email SMTP, JWT Signing Keys
+
+**Spec:** [SPEC-auth.md](../SPEC-auth.md) § Phone auth (OTP), § Dashboard Configuration; [SPEC-infra.md](../SPEC-infra.md) § Verifying Supabase JWTs (Future)
+**Date:** 2026-08-24
+**Status:** Code portion (phone auth) done and tested. Two of three pieces requested were manual/dashboard-only with no code to write — see below.
+
+### A6 — Phone auth (OTP)
+
+- [x] **A6: Add `signInWithOtp`/`verifyOtp` to `useAuth.ts`, phone/OTP UI to `AuthSheet.tsx`**
+  - Acceptance: Email/Phone method toggle; phone step validates E.164
+    format before calling Supabase; successful send moves to a code-entry
+    step; successful verify closes the sheet like email sign-in does;
+    "Use a different number" and "Resend code" both work; no separate
+    sign-in/sign-up distinction for phone (Supabase's `signInWithOtp` is
+    unified — confirmed via SDK type inspection, not assumed)
+  - Verify: `npx tsc --noEmit` passes; `npx jest` passes, `useAuth.ts`
+    stays at 100% stmts/100% funcs/95.8% branches; `AuthSheet.tsx` at 95%
+    stmts (9 new phone-flow tests, all passing, verified 3x for stability)
+  - Files: `frontend/src/features/auth/useAuth.ts`,
+    `frontend/src/features/auth/AuthSheet.tsx`,
+    `frontend/__tests__/useAuth.test.ts`,
+    `frontend/__tests__/AuthSheet.test.tsx`
+  - **Outstanding:** unverified against the real Twilio-backed Supabase
+    project — needs the Twilio dashboard config in `SPEC-auth.md` § Dashboard
+    Configuration done first. Same category of gap as A1–A5's live-auth
+    verification: code-complete and unit-tested, not live-verified.
+
+### Brevo SMTP — no code task
+
+Dashboard + DNS only (Brevo account, domain verification, SPF/DKIM,
+Supabase SMTP Settings). Exact field values recorded in `SPEC-auth.md`
+§ Dashboard Configuration. Nothing in this repo changes.
+
+### JWT signing keys — no code task, premise corrected
+
+Requested as "the JWT signing key change needs a backend update." Grepped
+the backend first rather than assuming: zero JWT-verification code exists
+today, so there is nothing to migrate. Rotating to asymmetric keys in the
+Supabase dashboard has no effect on this codebase as it stands. Recorded
+the JWKS-based verification approach in `SPEC-infra.md` § Verifying
+Supabase JWTs (Future) as ready-to-build guidance for whenever a backend
+route actually needs to authenticate a Supabase user — not built
+speculatively, since it would have no caller and therefore no way to be
+tested.

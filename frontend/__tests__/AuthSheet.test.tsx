@@ -29,6 +29,8 @@ const mockUseAuth = useAuth as jest.Mock;
 const signUp = jest.fn();
 const signIn = jest.fn();
 const signOut = jest.fn();
+const signInWithOtp = jest.fn();
+const verifyOtp = jest.fn();
 const onClose = jest.fn();
 
 function mockSignedOut() {
@@ -39,6 +41,8 @@ function mockSignedOut() {
     signUp,
     signIn,
     signOut,
+    signInWithOtp,
+    verifyOtp,
   });
 }
 
@@ -50,6 +54,8 @@ function mockSignedIn(email = 'a@b.com') {
     signUp,
     signIn,
     signOut,
+    signInWithOtp,
+    verifyOtp,
   });
 }
 
@@ -151,6 +157,164 @@ describe('signed out', () => {
     );
     expect(screen.queryByText('User already registered')).toBeNull();
     expect(screen.queryByText(/already registered/i)).toBeNull();
+  });
+});
+
+describe('phone auth', () => {
+  it('switching to the Phone tab shows a phone input instead of email/password', async () => {
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+
+    expect(screen.getByPlaceholderText('Phone number, e.g. +491701234567')).toBeTruthy();
+    expect(screen.queryByPlaceholderText('Email')).toBeNull();
+    expect(screen.queryByPlaceholderText('Password')).toBeNull();
+  });
+
+  it('rejects a malformed phone number without calling Supabase', async () => {
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '0170123',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+
+    expect(
+      screen.getByText('Enter a phone number in international format, e.g. +491701234567.'),
+    ).toBeTruthy();
+    expect(signInWithOtp).not.toHaveBeenCalled();
+  });
+
+  it('sends a code and shows the verification step', async () => {
+    signInWithOtp.mockResolvedValue({ error: null, code: null });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '+491701234567',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith('+491701234567'));
+    expect(screen.getByText('Enter the code sent to +491701234567.')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Verification code')).toBeTruthy();
+  });
+
+  it('shows the server error inline when sending the code fails', async () => {
+    signInWithOtp.mockResolvedValue({ error: 'Invalid phone number', code: 'validation_failed' });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '+491701234567',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+
+    await waitFor(() => expect(screen.getByText('Invalid phone number')).toBeTruthy());
+    expect(screen.queryByPlaceholderText('Verification code')).toBeNull();
+  });
+
+  it('rejects a too-short verification code without calling Supabase', async () => {
+    signInWithOtp.mockResolvedValue({ error: null, code: null });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '+491701234567',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+    await waitFor(() => expect(screen.getByPlaceholderText('Verification code')).toBeTruthy());
+
+    await fireEvent.changeText(screen.getByPlaceholderText('Verification code'), '12');
+    await fireEvent.press(screen.getByText('Verify'));
+
+    expect(screen.getByText('Enter the code from your text message.')).toBeTruthy();
+    expect(verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it('verifies the code and closes the sheet on success', async () => {
+    signInWithOtp.mockResolvedValue({ error: null, code: null });
+    verifyOtp.mockResolvedValue({ error: null, code: null });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '+491701234567',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+    await waitFor(() => expect(screen.getByPlaceholderText('Verification code')).toBeTruthy());
+
+    await fireEvent.changeText(screen.getByPlaceholderText('Verification code'), '123456');
+    await fireEvent.press(screen.getByText('Verify'));
+
+    await waitFor(() =>
+      expect(verifyOtp).toHaveBeenCalledWith('+491701234567', '123456'),
+    );
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows the server error inline when verification fails', async () => {
+    signInWithOtp.mockResolvedValue({ error: null, code: null });
+    verifyOtp.mockResolvedValue({ error: 'Token has expired or is invalid', code: 'otp_expired' });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '+491701234567',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+    await waitFor(() => expect(screen.getByPlaceholderText('Verification code')).toBeTruthy());
+
+    await fireEvent.changeText(screen.getByPlaceholderText('Verification code'), '000000');
+    await fireEvent.press(screen.getByText('Verify'));
+
+    await waitFor(() =>
+      expect(screen.getByText('Token has expired or is invalid')).toBeTruthy(),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('"Use a different number" returns to the phone-entry step', async () => {
+    signInWithOtp.mockResolvedValue({ error: null, code: null });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '+491701234567',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+    await waitFor(() => expect(screen.getByPlaceholderText('Verification code')).toBeTruthy());
+
+    await fireEvent.press(screen.getByText('Use a different number'));
+
+    expect(screen.getByPlaceholderText('Phone number, e.g. +491701234567')).toBeTruthy();
+    expect(screen.queryByPlaceholderText('Verification code')).toBeNull();
+  });
+
+  it('"Resend code" calls signInWithOtp again with the same number', async () => {
+    signInWithOtp.mockResolvedValue({ error: null, code: null });
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    await fireEvent.press(screen.getByText('Phone'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Phone number, e.g. +491701234567'),
+      '+491701234567',
+    );
+    await fireEvent.press(screen.getByText('Send Code'));
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledTimes(1));
+
+    await fireEvent.press(screen.getByText('Resend code'));
+
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledTimes(2));
+    expect(signInWithOtp).toHaveBeenNthCalledWith(2, '+491701234567');
   });
 });
 

@@ -13,8 +13,10 @@ import { useAuth } from './useAuth';
 
 const SNAP_POINTS = ['45%'];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^\+[1-9]\d{7,14}$/;
 
 type Mode = 'signin' | 'signup';
+type Method = 'email' | 'phone';
 
 interface AuthSheetProps {
   visible: boolean;
@@ -23,10 +25,14 @@ interface AuthSheetProps {
 
 export function AuthSheet({ visible, onClose }: AuthSheetProps) {
   const sheetRef = useRef<BottomSheetMethods>(null);
-  const { session, user, signUp, signIn, signOut } = useAuth();
+  const { session, user, signUp, signIn, signOut, signInWithOtp, verifyOtp } = useAuth();
+  const [method, setMethod] = useState<Method>('email');
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -42,12 +48,24 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
   function resetForm() {
     setEmail('');
     setPassword('');
+    setPhone('');
+    setOtp('');
+    setOtpSent(false);
     setError(null);
     setInfo(null);
   }
 
   function switchMode(next: Mode) {
     setMode(next);
+    setError(null);
+    setInfo(null);
+  }
+
+  function switchMethod(next: Method) {
+    setMethod(next);
+    setPhone('');
+    setOtp('');
+    setOtpSent(false);
     setError(null);
     setInfo(null);
   }
@@ -104,6 +122,60 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
     onClose();
   }
 
+  async function handleSendCode() {
+    setError(null);
+    setInfo(null);
+
+    if (!PHONE_RE.test(phone.trim())) {
+      setError('Enter a phone number in international format, e.g. +491701234567.');
+      return;
+    }
+
+    setSubmitting(true);
+    // signInWithOtp both signs in an existing phone number and signs up a new
+    // one — Supabase treats phone OTP as a single unified passwordless flow,
+    // so there's no separate sign-in/sign-up distinction to make here (and
+    // no "already registered" leak to guard against, unlike email sign-up).
+    const result = await signInWithOtp(phone.trim());
+    setSubmitting(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    setOtpSent(true);
+    setInfo(`Enter the code sent to ${phone.trim()}.`);
+  }
+
+  async function handleVerifyCode() {
+    setError(null);
+
+    if (otp.trim().length < 4) {
+      setError('Enter the code from your text message.');
+      return;
+    }
+
+    setSubmitting(true);
+    const result = await verifyOtp(phone.trim(), otp.trim());
+    setSubmitting(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    resetForm();
+    onClose();
+  }
+
+  function handleChangeNumber() {
+    setOtpSent(false);
+    setOtp('');
+    setError(null);
+    setInfo(null);
+  }
+
   return (
     <BottomSheet
       ref={sheetRef}
@@ -131,56 +203,133 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
           <>
             <View style={styles.tabs}>
               <Pressable
-                style={[styles.tab, mode === 'signin' && styles.tabActive]}
-                onPress={() => switchMode('signin')}
+                style={[styles.tab, method === 'email' && styles.tabActive]}
+                onPress={() => switchMethod('email')}
               >
-                <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
-                  Sign In
+                <Text style={[styles.tabText, method === 'email' && styles.tabTextActive]}>
+                  Email
                 </Text>
               </Pressable>
               <Pressable
-                style={[styles.tab, mode === 'signup' && styles.tabActive]}
-                onPress={() => switchMode('signup')}
+                style={[styles.tab, method === 'phone' && styles.tabActive]}
+                onPress={() => switchMethod('phone')}
               >
-                <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
-                  Sign Up
+                <Text style={[styles.tabText, method === 'phone' && styles.tabTextActive]}>
+                  Phone
                 </Text>
               </Pressable>
             </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#94a3b8"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#94a3b8"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="password"
-            />
+            {method === 'email' ? (
+              <>
+                <View style={styles.tabs}>
+                  <Pressable
+                    style={[styles.tab, mode === 'signin' && styles.tabActive]}
+                    onPress={() => switchMode('signin')}
+                  >
+                    <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
+                      Sign In
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.tab, mode === 'signup' && styles.tabActive]}
+                    onPress={() => switchMode('signup')}
+                  >
+                    <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
+                      Sign Up
+                    </Text>
+                  </Pressable>
+                </View>
 
-            {error && <Text style={styles.error}>{error}</Text>}
-            {info && <Text style={styles.info}>{info}</Text>}
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email"
+                  placeholderTextColor="#94a3b8"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="#94a3b8"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="password"
+                />
 
-            <Pressable style={styles.button} onPress={handleSubmit} disabled={submitting}>
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Continue</Text>
-              )}
-            </Pressable>
+                {error && <Text style={styles.error}>{error}</Text>}
+                {info && <Text style={styles.info}>{info}</Text>}
+
+                <Pressable style={styles.button} onPress={handleSubmit} disabled={submitting}>
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Continue</Text>
+                  )}
+                </Pressable>
+              </>
+            ) : !otpSent ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Phone number, e.g. +491701234567"
+                  placeholderTextColor="#94a3b8"
+                  value={phone}
+                  onChangeText={setPhone}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="phone-pad"
+                  textContentType="telephoneNumber"
+                />
+
+                {error && <Text style={styles.error}>{error}</Text>}
+
+                <Pressable style={styles.button} onPress={handleSendCode} disabled={submitting}>
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Send Code</Text>
+                  )}
+                </Pressable>
+              </>
+            ) : (
+              <>
+                {info && <Text style={styles.info}>{info}</Text>}
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Verification code"
+                  placeholderTextColor="#94a3b8"
+                  value={otp}
+                  onChangeText={setOtp}
+                  keyboardType="number-pad"
+                  textContentType="oneTimeCode"
+                />
+
+                {error && <Text style={styles.error}>{error}</Text>}
+
+                <Pressable style={styles.button} onPress={handleVerifyCode} disabled={submitting}>
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Verify</Text>
+                  )}
+                </Pressable>
+                <Pressable onPress={handleChangeNumber} disabled={submitting}>
+                  <Text style={styles.link}>Use a different number</Text>
+                </Pressable>
+                <Pressable onPress={handleSendCode} disabled={submitting}>
+                  <Text style={styles.link}>Resend code</Text>
+                </Pressable>
+              </>
+            )}
           </>
         )}
       </BottomSheetView>
@@ -261,6 +410,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0369a1',
     marginBottom: 10,
+  },
+  link: {
+    fontSize: 13,
+    color: '#6366f1',
+    textAlign: 'center',
+    marginTop: 10,
   },
   button: {
     height: 46,

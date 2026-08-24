@@ -11,6 +11,8 @@ jest.mock('../src/lib/supabase', () => ({
       signUp: jest.fn(),
       signInWithPassword: jest.fn(),
       signOut: jest.fn(),
+      signInWithOtp: jest.fn(),
+      verifyOtp: jest.fn(),
     },
   },
 }));
@@ -20,6 +22,8 @@ const mockOnAuthStateChange = supabase.auth.onAuthStateChange as jest.Mock;
 const mockSignUp = supabase.auth.signUp as jest.Mock;
 const mockSignInWithPassword = supabase.auth.signInWithPassword as jest.Mock;
 const mockSignOut = supabase.auth.signOut as jest.Mock;
+const mockSignInWithOtp = supabase.auth.signInWithOtp as jest.Mock;
+const mockVerifyOtp = supabase.auth.verifyOtp as jest.Mock;
 
 const SESSION = { user: { id: '1', email: 'a@b.com' } } as unknown as Session;
 const unsubscribe = jest.fn();
@@ -149,5 +153,57 @@ describe('useAuth', () => {
 
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     expect(outcome).toEqual({ error: null, code: null });
+  });
+
+  it('signInWithOtp calls supabase.auth.signInWithOtp and returns no error on success', async () => {
+    mockSignInWithOtp.mockResolvedValue({ data: {}, error: null });
+    const { result } = await renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const outcome = await result.current.signInWithOtp('+491701234567');
+
+    expect(mockSignInWithOtp).toHaveBeenCalledWith({ phone: '+491701234567' });
+    expect(outcome).toEqual({ error: null, code: null });
+  });
+
+  it('signInWithOtp surfaces the Supabase error message on failure', async () => {
+    mockSignInWithOtp.mockResolvedValue({
+      data: {},
+      error: { message: 'Invalid phone number', code: 'validation_failed' },
+    });
+    const { result } = await renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const outcome = await result.current.signInWithOtp('not-a-phone');
+
+    expect(outcome).toEqual({ error: 'Invalid phone number', code: 'validation_failed' });
+  });
+
+  it('verifyOtp calls supabase.auth.verifyOtp with type sms and returns no error on success', async () => {
+    mockVerifyOtp.mockResolvedValue({ data: {}, error: null });
+    const { result } = await renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const outcome = await result.current.verifyOtp('+491701234567', '123456');
+
+    expect(mockVerifyOtp).toHaveBeenCalledWith({
+      phone: '+491701234567',
+      token: '123456',
+      type: 'sms',
+    });
+    expect(outcome).toEqual({ error: null, code: null });
+  });
+
+  it('verifyOtp surfaces the Supabase error message on failure', async () => {
+    mockVerifyOtp.mockResolvedValue({
+      data: {},
+      error: { message: 'Token has expired or is invalid', code: 'otp_expired' },
+    });
+    const { result } = await renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const outcome = await result.current.verifyOtp('+491701234567', '000000');
+
+    expect(outcome).toEqual({ error: 'Token has expired or is invalid', code: 'otp_expired' });
   });
 });

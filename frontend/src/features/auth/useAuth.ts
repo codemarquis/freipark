@@ -51,5 +51,15 @@ export function useAuth() {
     return { error: error?.message ?? null, code: error?.code ?? null };
   }
 
-  return { ...state, signUp, signIn, signOut };
+  async function signInWithOtp(phone: string): Promise<AuthResult> {
+    const { error } = await supabase.auth.signInWithOtp({ phone });
+    return { error: error?.message ?? null, code: error?.code ?? null };
+  }
+
+  async function verifyOtp(phone: string, token: string): Promise<AuthResult> {
+    const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
+    return { error: error?.message ?? null, code: error?.code ?? null };
+  }
+
+  return { ...state, signUp, signIn, signOut, signInWithOtp, verifyOtp };
 }

@@ -571,6 +571,78 @@ if routing correctness becomes a source of bugs.
 
 ---
 
+## Verifying Supabase JWTs (Future)
+
+*(Added 2026-08-24, in response to a question about migrating the FastAPI
+backend from a shared-secret JWT check to JWKS-based verification.)*
+
+**There is nothing to migrate.** Grepped the entire backend — `backend/`
+has zero JWT-verification code today, no `jwt`/`jwks`/token-decode logic
+anywhere, and no JWT library in `requirements.txt`. Both existing routes
+(`/health/db`, `/route`) are intentionally public; `/route` rate-limits by
+IP, not by user identity. So rotating the Supabase project's JWT signing
+keys from a shared secret to asymmetric (RS256/ES256) is a pure dashboard
+action with **zero backend impact**, because nothing here currently cares
+what algorithm signed the token.
+
+**Caveat worth having up front:** most Supabase-backed features — including
+Phase 2's `spot_reports` below — don't need backend JWT verification at
+all. The established pattern in this codebase (`useSpots.ts` calling
+`supabase.rpc()` directly) is for the *client* to call Supabase directly
+with the user's session token, and let Postgres RLS policies (checking
+`auth.uid()`) enforce who can write what — Supabase's own infrastructure
+verifies the JWT internally for that path, not our code. Backend JWT
+verification only becomes necessary if a **FastAPI route** needs to know
+the caller's identity for logic RLS can't express (e.g., server-side
+per-user rate limiting, a business rule spanning multiple tables). Don't
+build the snippet below speculatively — it has no caller yet, which means
+no test coverage and no way to verify it actually works. Build it in the
+same change that adds the first route that needs it.
+
+**When that day comes**, verify against Supabase's JWKS endpoint rather
+than a static secret — this is what asymmetric signing keys enable, and
+it's the right way to do it from day one rather than a later migration:
+
+```python
+# backend/auth.py (does not exist yet — for when it's needed)
+import time
+import httpx
+from fastapi import HTTPException, Header
+from jose import jwt  # add python-jose[cryptography] to requirements.txt
+
+JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+_jwks_cache: dict | None = None
+_jwks_cached_at: float = 0
+JWKS_CACHE_TTL_S = 3600  # Supabase rotates keys infrequently; no need to refetch every request
+
+async def _get_jwks() -> dict:
+    global _jwks_cache, _jwks_cached_at
+    if _jwks_cache is None or time.time() - _jwks_cached_at > JWKS_CACHE_TTL_S:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(JWKS_URL)
+            resp.raise_for_status()
+            _jwks_cache = resp.json()
+            _jwks_cached_at = time.time()
+    return _jwks_cache
+
+async def get_current_user_id(authorization: str = Header(...)) -> str:
+    token = authorization.removeprefix("Bearer ").strip()
+    jwks = await _get_jwks()
+    try:
+        claims = jwt.decode(token, jwks, algorithms=["RS256", "ES256"], audience="authenticated")
+    except Exception:
+        raise HTTPException(401, "Invalid or expired token")
+    return claims["sub"]  # Supabase's auth.users.id
+```
+
+Module-level `_jwks_cache` is fine for a single-process FastAPI deployment
+(this project's current Docker Compose setup — one `api` container); if
+that ever changes to multiple worker processes without shared state,
+switch to a proper shared cache (Redis, or a short-TTL in-memory cache per
+worker is still fine since JWKS rotation is rare).
+
+---
+
 ## Phased Roadmap (Future — Not MVP Scope)
 
 The MVP shows static parking spot locations from OSM. The following phases are documented here so the schema doesn't need to be redesigned later.
