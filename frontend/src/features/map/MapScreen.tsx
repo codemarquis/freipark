@@ -4,6 +4,7 @@ import { Camera, Map, UserLocation } from '@maplibre/maplibre-react-native';
 import type { CameraRef, StyleSpecification } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import protomapsLayers from 'protomaps-themes-base';
+import { withNoSpaceFontStacks } from '../../lib/fonts';
 import { useSpots } from './useSpots';
 import { useRoute } from './useRoute';
 import { SpotLayer } from './SpotLayer';
@@ -16,6 +17,18 @@ import type { SpotRow } from '../../lib/types';
 
 const BERLIN: [number, number] = [13.405, 52.52];
 const PMTILES_URL = process.env.EXPO_PUBLIC_PMTILES_URL ?? '';
+// Falls back to Protomaps' hosted assets until the R2 mirror is uploaded
+// and EXPO_PUBLIC_GLYPHS_URL is set — see SPEC-map.md § Glyph Hosting.
+const CUSTOM_GLYPHS_URL = process.env.EXPO_PUBLIC_GLYPHS_URL;
+const GLYPHS_URL =
+  CUSTOM_GLYPHS_URL ?? 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf';
+// withNoSpaceFontStacks (src/lib/fonts.ts) works around a MapLibre Native
+// glyph-URL encoding bug for font stacks with spaces — see that file for
+// why, and SPEC-map.md § Glyph Hosting for the R2-mirror plan this pairs
+// with. Only applied once EXPO_PUBLIC_GLYPHS_URL is set, so today's
+// (imperfect) Protomaps-fallback behavior doesn't regress before then —
+// the fallback's files are hosted under spaced names, so renaming here
+// without a matching host would break it outright.
 
 // germany.pmtiles coverage — reject GPS fixes outside this box (e.g. simulator default = Cupertino)
 const GERMANY = { west: 4.5, south: 46.5, east: 15.1, north: 55.1 };
@@ -25,8 +38,7 @@ function inGermany(lon: number, lat: number) {
 
 const MAP_STYLE: StyleSpecification = {
   version: 8,
-  glyphs:
-    'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+  glyphs: GLYPHS_URL,
   sprite:
     'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
   sources: {
@@ -36,7 +48,9 @@ const MAP_STYLE: StyleSpecification = {
       attribution: '© OpenStreetMap contributors',
     },
   },
-  layers: protomapsLayers('protomaps', 'light', 'de'),
+  layers: CUSTOM_GLYPHS_URL
+    ? withNoSpaceFontStacks(protomapsLayers('protomaps', 'light', 'de'))
+    : protomapsLayers('protomaps', 'light', 'de'),
 };
 
 export function MapScreen() {

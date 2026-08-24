@@ -321,6 +321,125 @@ GPS fix won't yank the view back to the user's position.
 
 ---
 
+## Glyph Hosting
+
+*(Added 2026-08-24.)* Root-caused a real bug: the "blank map" symptom from
+earlier work wasn't fully fixed — it resurfaced as maps rendering tiles but
+with **no text labels**. Device logs showed:
+
+```
+Failed to load glyph range 0-255 for font stack Noto Sans Regular:
+(The request timed out.)
+```
+
+**Root cause, confirmed by inspecting the actual requested URL in device
+logs** (not the template — the real, resolved request): MapLibre Native
+was sending a corrupted URL for any font-stack name containing spaces —
+`Noto Sans Regular` came out as `Noto Þ<garbage>ans20Regular`. This is a
+client-side bug in `@maplibre/maplibre-react-native`'s glyph-URL
+templating (matches a documented class of issue in the MapLibre ecosystem
+— unencoded/mis-encoded spaces in `{fontstack}` substitution; see
+`maplibre/martin#1443`), not something fixable from application code, and
+**not primarily a Protomaps GitHub Pages reliability problem** — a plain
+`curl` to the correctly-encoded URL from a terminal succeeded fast and
+consistently; the corruption only happens inside MapLibre Native's own
+request construction.
+
+**Fix:** since we control both the style's font-stack references and
+(once uploaded) our own hosted glyph file names, sidestep the bug
+entirely by never sending a spaced font-stack name to MapLibre Native.
+`src/lib/fonts.ts` renames the three fonts `protomaps-themes-base`
+actually uses (`Noto Sans Regular/Medium/Italic` — confirmed via direct
+inspection of the generated style, not assumed) to `NotoSansRegular` /
+`NotoSansMedium` / `NotoSansItalic`, scoped to just each layer's
+`layout['text-font']` (deliberately not a blanket string replace over the
+whole layer — a first implementation attempt did that, and a test written
+against it caught that it would also rename unrelated matching text
+elsewhere in a layer; fixed before it shipped).
+
+**Rollout is env-var-gated, not automatic:**
+
+```ts
+const CUSTOM_GLYPHS_URL = process.env.EXPO_PUBLIC_GLYPHS_URL;
+const GLYPHS_URL = CUSTOM_GLYPHS_URL ?? 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf';
+// ...
+layers: CUSTOM_GLYPHS_URL
+  ? withNoSpaceFontStacks(protomapsLayers('protomaps', 'light', 'de'))
+  : protomapsLayers('protomaps', 'light', 'de'),
+```
+
+The rename only applies once `EXPO_PUBLIC_GLYPHS_URL` is set. Reason: the
+Protomaps fallback hosts its files under the *original* spaced names —
+renaming the style's font-stack references without a matching host would
+break the fallback outright, not just leave it flaky. Until R2 is
+populated, the fallback keeps today's (still bug-prone) behavior rather
+than regressing to worse.
+
+**Verified end-to-end, not just unit-tested:** couldn't upload to the
+project's actual Cloudflare R2 bucket (no credentials/tooling — Cloudflare
+API access, `wrangler`, `rclone`, and `aws` CLI are all unavailable in
+this environment). Instead, stood up a throwaway local HTTP server serving
+the renamed glyph files, pointed `EXPO_PUBLIC_GLYPHS_URL` at it, and
+confirmed on a **freshly reinstalled** simulator build (to rule out
+MapLibre's on-disk offline cache masking the result) that: labels render
+correctly everywhere — streets, districts, parks, stations, with correct
+German diacritics (ß, ü, ö) — and zero glyph errors in device logs. This
+is real confirmation the fix mechanism works, not just that the unit
+tests pass.
+
+**Corrected 2026-08-24 — the file list below was wrong the first time
+this section was written, and it was a real bug, not just an
+incompleteness:** the original version of this section recommended
+mirroring only 4 Latin ranges per font (12 files total) as "enough for
+German + common Western European text." That assumption was wrong and
+got caught by an actual device-log error from testing against the
+verification mirror: `Failed to load glyph range 8192-8447 for font
+stack NotoSansRegular` — range 8192-8447 is Unicode General Punctuation +
+Currency Symbols (U+2000–U+20FF), needed for the € sign and typographic
+quotes/dashes that show up in real German street/POI names, and it
+wasn't in the 4-range set. Probed further and found **all 256 possible
+ranges exist** for each font stack (the complete Basic Multilingual
+Plane, 0–65535) — Germany-wide OSM data can't be assumed to stay within a
+hand-picked Latin subset, since business/POI names include arbitrary
+scripts and symbols. Downloaded and verified the complete set: **768
+files (256 ranges × 3 fonts), ~13MB total** — small enough that
+mirroring everything is strictly safer than guessing at a subset, and R2
+has zero egress cost regardless of file count (this project's own hard
+constraint). Mirror the complete set, not a curated one:
+
+```bash
+# Run for each of: "Noto Sans Regular", "Noto Sans Medium", "Noto Sans Italic"
+# (source names have spaces; destination path must not, to avoid the bug above)
+for i in $(seq 0 255); do
+  start=$((i * 256)); end=$((start + 255))
+  curl -sf -o "NotoSansRegular/${start}-${end}.pbf" \
+    "https://protomaps.github.io/basemaps-assets/fonts/Noto%20Sans%20Regular/${start}-${end}.pbf"
+done
+```
+
+**Still needed (dashboard/infra access this environment doesn't have):**
+someone with Cloudflare R2 write access must actually upload the 768
+files and set `EXPO_PUBLIC_GLYPHS_URL` in the real `frontend/.env`.
+Upload to the same R2 bucket that hosts `berlin.pmtiles`, under an
+object-key path that preserves the `{fontstack}/{range}.pbf` structure
+with the *no-space* names (e.g. `wrangler r2 object put
+freipark-tiles/fonts/NotoSansRegular/0-255.pbf --file=...`, repeated per
+file — or a loop/`rclone sync` if uploading all 768 by hand isn't
+practical), then set:
+
+```
+EXPO_PUBLIC_GLYPHS_URL=https://pub-<hash>.r2.dev/fonts/{fontstack}/{range}.pbf
+```
+
+The complete-set mirror already covers every script in the Basic
+Multilingual Plane for these 3 fonts, so expanding to non-Latin-script
+cities later needs no further glyph work. If a future city needs a font
+weight `protomaps-themes-base` doesn't already use, that's a new entry in
+`FONT_RENAME` (`src/lib/fonts.ts`) plus its own 256-file mirror — no
+change to the URL template or rename mechanism itself.
+
+---
+
 ## Code Style
 
 Strict TypeScript (`"strict": true`). No `any`. All Supabase RPC responses

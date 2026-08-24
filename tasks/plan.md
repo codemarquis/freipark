@@ -574,3 +574,67 @@ Supabase JWTs (Future) as ready-to-build guidance for whenever a backend
 route actually needs to authenticate a Supabase user — not built
 speculatively, since it would have no caller and therefore no way to be
 tested.
+
+---
+---
+
+# Addendum: Map Glyph-Loading Root Cause & Fix
+
+**Spec:** [SPEC-map.md](../SPEC-map.md) § Glyph Hosting
+**Date:** 2026-08-24
+**Status:** Root cause found and fixed in code, verified end-to-end via a
+local stand-in server. Real deployment blocked on Cloudflare R2 upload
+access this environment doesn't have.
+
+- [x] **Diagnose:** confirmed via device logs that the earlier "blank map"
+  fix was incomplete — resurfaced as missing text labels. The logged
+  error ("request timed out") was misleading; inspecting the *actual
+  resolved request URL* (not the template) revealed MapLibre Native
+  corrupts font-stack names containing spaces during `{fontstack}`
+  substitution — a client-side bug, not a Protomaps hosting reliability
+  issue (a plain `curl` to the correct URL succeeded fast and
+  consistently from this environment).
+- [x] **Fix:** `frontend/src/lib/fonts.ts` (`withNoSpaceFontStacks`) —
+  renames the 3 font stacks `protomaps-themes-base` actually uses to
+  space-free equivalents, scoped to just `layout['text-font']`. A test
+  written against the first implementation (a blanket JSON string
+  replace) caught that it would rename unrelated text elsewhere in a
+  layer too — fixed to a properly-scoped recursive expression walk before
+  shipping, not after.
+  - Verify: `npx tsc --noEmit` clean; `npx jest` — 6 new tests in
+    `fonts.test.ts`, `fonts.ts` at 100% coverage; 85/85 total tests
+    passing, stable across 3 runs
+  - Files: `frontend/src/lib/fonts.ts` (new),
+    `frontend/__tests__/fonts.test.ts` (new),
+    `frontend/src/features/map/MapScreen.tsx`,
+    `frontend/.env.example`
+- [x] **Verified end-to-end on-device**, not just unit-tested: initially
+  downloaded only 12 glyph files (3 fonts × 4 hand-picked Latin ranges,
+  ~1.1MB), served them from a throwaway local HTTP server, pointed
+  `EXPO_PUBLIC_GLYPHS_URL` at it, and confirmed on a **freshly
+  reinstalled** simulator build (ruling out MapLibre's on-disk offline
+  cache masking the result) that labels render correctly with correct
+  German diacritics, and zero glyph errors in device logs.
+- [x] **Scope correction (still 2026-08-24, later same day):** after
+  cleanup, a stale still-running app session (pointed at the by-then-dead
+  local test server) surfaced `Failed to load glyph range 8192-8447 for
+  font stack NotoSansRegular` — the connection failure itself was just
+  the dead test server, but the range being requested at all proved the
+  original 4-range guess was wrong: real German OSM data needs Unicode
+  blocks outside plain Latin (8192-8447 = General Punctuation/Currency
+  Symbols, needed for €). Probed further, found all 256 ranges exist per
+  font, and downloaded the **complete set: 768 files (256 × 3 fonts),
+  ~13MB** — small enough that mirroring everything beats guessing at a
+  subset. `SPEC-map.md` § Glyph Hosting has the corrected file count and
+  a loop-based download script instead of a hardcoded list.
+- [ ] **Outstanding — not something this environment can do:** actually
+  uploading the 768 glyph files to the project's real Cloudflare R2
+  bucket and setting `EXPO_PUBLIC_GLYPHS_URL` in the real
+  `frontend/.env`. No Cloudflare credentials, `wrangler`, `rclone`, or
+  `aws` CLI available here.
+- [x] **Cleanup:** the throwaway local HTTP server and temporary
+  `EXPO_PUBLIC_GLYPHS_URL` test value were removed after the first
+  verification pass; `frontend/.env` is back to its pre-test state;
+  Metro was restarted clean. The stale app session that surfaced the
+  scope-correction error above was a leftover from *before* that
+  cleanup — not a new regression.
