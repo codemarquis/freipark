@@ -275,6 +275,20 @@ CREATE POLICY "spots_public_read"
 -- import script using the service role key, which bypasses RLS.
 ```
 
+**Updated 2026-08-25:** `cities` also has RLS enabled now (migration
+`005_enable_rls_cities.sql`), with the same public-read policy pattern —
+previously it relied solely on the `GRANT SELECT` from
+`003_grant_anon_select.sql`, which Supabase's Security Advisor flags as a
+warning regardless of GRANTs. Effective access is unchanged (still fully
+public read, no auth required), just now also explicit via RLS. Verified
+live: anon `GET /rest/v1/cities` still returns rows normally.
+
+`spatial_ref_sys` (a PostGIS system table, not app data) trips the same
+Advisor warning but **can't** be fixed via `supabase db push` — that role
+doesn't own the table (`must be owner of table spatial_ref_sys`). Left
+as-is; would need the Supabase dashboard's SQL Editor (which may run with
+different privileges) if it's worth chasing.
+
 ---
 
 ## OSM Import Pipeline
