@@ -6,6 +6,15 @@
 # Supabase CLI local state
 supabase/.temp/
 
+# Self-hosted Supabase (SS2): generated configs contain real secrets —
+# the .template counterparts (committed) have none.
+supabase/self-host/kong.yml
+supabase/self-host/init/zz-set-role-passwords.sql
+
+# Local-only Docker Compose overrides (e.g. dev port publishing) — never
+# deployed, never committed.
+docker-compose.override.yml
+
 # OSM data cache and map tiles — large binary assets, served from R2
 backend/scripts/data/
 *.pmtiles

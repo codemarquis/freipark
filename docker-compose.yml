@@ -85,7 +85,126 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # --- Self-hosted Supabase (SS2, see SPEC-infra.md § Self-Hosted Supabase
+  # Migration (Proposed) and tasks/plan.md § SS2). Not yet wired into the
+  # live app — backend/.env and frontend/.env still point at managed
+  # Supabase until SS10. `db`/`auth`/`rest` scoped from the official
+  # self-hosting stack: no Storage, Realtime, Studio, or Analytics —
+  # confirmed unused by this codebase in the spec.
+
+  db:
+    image: supabase/postgres:15.14.1.177
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${SUPABASE_SELFHOSTED_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - supabase_db_data:/var/lib/postgresql/data
+      # A single-file mount, deliberately — the image's own
+      # /docker-entrypoint-initdb.d/ already has migrate.sh + init-scripts/
+      # (creates the auth/storage schemas and roles this script alters);
+      # mounting the whole directory would replace that entirely.
+      - ./supabase/self-host/init/zz-set-role-passwords.sql:/docker-entrypoint-initdb.d/zz-set-role-passwords.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No host port — internal Compose network only.
+
+  auth:
+    image: supabase/gotrue:v2.197.0
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: ${SUPABASE_SELFHOSTED_EXTERNAL_URL:-http://localhost:8000}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${SUPABASE_SELFHOSTED_DB_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${GOTRUE_SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: "*"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # Temporary until SS7 wires real Brevo SMTP — without a mailer
+      # configured, autoconfirm lets sign-up still be testable in SS2/SS3.
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "true"
+      # Temporary until SS7 wires real Twilio credentials — same reasoning.
+      GOTRUE_SMS_AUTOCONFIRM: "true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No host port — reachable only via kong.
+
+  rest:
+    image: postgrest/postgrest:v16.4
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    # No healthcheck: confirmed (docker exec) this image has no shell at
+    # all, static-binary only — no sh/bash/wget/curl to run one with.
+    # kong's depends_on below doesn't wait on a health condition for this
+    # service as a result; verified manually instead (§ SS2 verify step).
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${SUPABASE_SELFHOSTED_DB_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No host port — reachable only via kong.
+
+  kong:
+    image: kong:3.9
+    restart: always
+    depends_on:
+      - auth
+      - rest
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+    volumes:
+      - ./supabase/self-host/kong.yml:/home/kong/kong.yml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # No host port in this shared file — SS4 fronts this with Caddy on the
+    # internal network once deployed. For local SS2/SS3 validation, publish
+    # a port via docker-compose.override.yml (gitignored), not here.
+
 volumes:
   osrm_data:
   caddy_data:
   caddy_config:
+  supabase_db_data:

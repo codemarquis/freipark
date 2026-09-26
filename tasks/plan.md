@@ -749,7 +749,16 @@ implementation-time concerns.)*
 
 ### SS1 — JWT secret and keys
 
-- [ ] **SS1: Generate `JWT_SECRET`; mint `anon` and `service_role` JWTs signed with it**
+- [x] **SS1: Generate `JWT_SECRET`; mint `anon` and `service_role` JWTs signed with it — done 2026-09-26.**
+  Generated `JWT_SECRET` via `openssl rand -base64 40`; minted both JWTs
+  with a stdlib-only HS256 implementation (no new dependency for a
+  one-off script) using the standard self-hosted claim shape (`role`,
+  `iss: supabase`, `iat`, 10-year `exp`, matching the self-hosting
+  convention since these act as static API keys, not session tokens).
+  Verified by independently recomputing each HMAC-SHA256 signature from
+  the secret (not just decoding) — both valid — and confirming the `role`
+  claim matches (`anon` / `service_role`) on each. All three values
+  written to `backend/.env` (already gitignored), not committed.
   - Acceptance: a securely-generated `JWT_SECRET` exists (32+ bytes,
     random); both keys minted per Supabase's self-hosting key-generation
     process (`role: anon` / `role: service_role` claims), decodable and
@@ -764,21 +773,55 @@ implementation-time concerns.)*
 
 ### SS2 — Add self-hosted services to `docker-compose.yml`
 
-- [ ] **SS2: Add `db`, `auth`, `rest`, `kong` services**
+- [x] **SS2: Add `db`, `auth`, `rest`, `kong` services — done 2026-09-26, local validation only (not the OVH box).**
+  Added all four to `docker-compose.yml` (`supabase/postgres:15.14.1.177`,
+  `supabase/gotrue:v2.197.0`, `postgrest/postgrest:v16.4`, `kong:3.9` —
+  real, verified-current tags, not guessed). Kong runs DB-less with a
+  declarative config generated from a committed `.template` (no secrets)
+  via `supabase/self-host/generate_config.sh`; a local-only, gitignored
+  `docker-compose.override.yml` publishes kong's port for testing (the
+  shared file has no host port — Caddy will reach it internally per SS4).
+  Two real bugs found and fixed along the way, not assumed away:
+  - `supabase/postgres` creates `authenticator`/`supabase_auth_admin`
+    **passwordless** — `POSTGRES_PASSWORD` only covers the superuser.
+    `auth`/`rest` couldn't authenticate until an init SQL script
+    (`supabase/self-host/init/zz-set-role-passwords.sql`, `zz-` prefix
+    deliberate — must sort after the image's own `migrate.sh`, which
+    creates those roles in the first place) set them explicitly. Confirmed
+    via direct `pg_authid` inspection, not guessed from the error message.
+  - Almost bind-mounted a directory over the *entire*
+    `/docker-entrypoint-initdb.d/`, which would have deleted the image's
+    own `migrate.sh` + `init-scripts/` (the actual auth/storage schema
+    bootstrap) — caught by inspecting the image's contents first; mounted
+    a single file instead.
   - Acceptance: `docker compose up -d db auth rest kong` (local dev
     machine or a scratch environment — **not the OVH box yet**) brings up
     all four healthy; `kong` reachable on its container port; `rest`
     responds to an unauthenticated `GET /` per PostgREST's default root
     response; `auth` responds to `GET /health` per GoTrue's own
     healthcheck endpoint
-  - Verify: `docker compose ps` shows all four `healthy`; `curl
-    localhost:<kong-port>/rest/v1/` returns PostgREST's OpenAPI root, not
-    a connection error
+  - Verify: `docker compose ps` shows db/auth/kong `healthy` (`rest` has
+    no healthcheck — confirmed via `docker exec` that the image has no
+    shell at all, not even `sh`, so no `CMD`/`CMD-SHELL` can run one;
+    verified functionally instead); `curl localhost:8000/rest/v1/`
+    returns `200` with PostgREST's OpenAPI root through Kong; `curl
+    localhost:8000/auth/v1/health` also returns `200`
   - Files: `docker-compose.yml`
 
 ### SS3 — Apply migrations to the new instance
 
-- [ ] **SS3: Run every `supabase/migrations/*.sql` file against the new `db` service, in order**
+- [x] **SS3: Run every `supabase/migrations/*.sql` file against the new `db` service, in order — done 2026-09-26.**
+  Applied all five (`001`–`005`) via `docker compose exec -T db psql -v
+  ON_ERROR_STOP=1`, piping each file's content in rather than requiring a
+  host `psql` client — all exited 0, only expected first-run notices
+  (extension-already-exists, policy-doesn't-exist-yet-so-skip-drop).
+  Confirmed schema landed: `SELECT slug FROM cities WHERE slug='berlin'`
+  returns a row, 33 cities total (Berlin + 32 from `004`), `PostGIS_Version()`
+  returns `3.3`. Published `db`'s port via `docker-compose.override.yml`
+  (local-only, gitignored) to run `backend/tests/test_db.py` from the host
+  with `DATABASE_URL` exported directly (overrides `backend/.env`'s value
+  via `python-dotenv`'s "don't clobber existing env vars" default) —
+  **4/4 passed**, identical to the managed-Supabase result.
   - Acceptance: all five migration files (`001`–`005`) apply without
     error; `backend/tests/test_db.py`'s four tests pass when pointed at
     this instance via a temporary `DATABASE_URL` override

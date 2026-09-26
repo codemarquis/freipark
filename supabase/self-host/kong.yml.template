@@ -1,0 +1,88 @@
+## Kong declarative config for self-hosted Supabase (SS2, see SPEC-infra.md
+## § Self-Hosted Supabase Migration (Proposed) and tasks/plan.md § SS2).
+##
+## Template only — no real keys here. `generate_config.sh` substitutes the
+## anon and service-role keys (see backend/.env) and writes the real,
+## gitignored `kong.yml` next to this file. Note: this comment
+## deliberately avoids writing those two var names in dollar-brace form,
+## since envsubst matches plain text, comments included — the generated
+## file's own header comment would otherwise leak both keys into a
+## comment. Routes only /rest/v1 (PostgREST) and /auth/v1 (GoTrue) —
+## this project doesn't use Storage or Realtime (confirmed via grep in
+## SPEC-infra.md's proposal), so no other services are routed here.
+
+_format_version: "2.1"
+_transform: true
+
+consumers:
+  - username: anon
+    keyauth_credentials:
+      - key: ${SUPABASE_SELFHOSTED_ANON_KEY}
+  - username: service_role
+    keyauth_credentials:
+      - key: ${SUPABASE_SELFHOSTED_SERVICE_ROLE_KEY}
+
+acls:
+  - consumer: anon
+    group: anon
+  - consumer: service_role
+    group: admin
+
+services:
+  - name: auth-v1-open
+    url: http://auth:9999/verify
+    routes:
+      - name: auth-v1-open
+        strip_path: true
+        paths:
+          - /auth/v1/verify
+    plugins:
+      - name: cors
+
+  - name: auth-v1-open-callback
+    url: http://auth:9999/callback
+    routes:
+      - name: auth-v1-open-callback
+        strip_path: true
+        paths:
+          - /auth/v1/callback
+    plugins:
+      - name: cors
+
+  - name: auth-v1
+    url: http://auth:9999/
+    routes:
+      - name: auth-v1-all
+        strip_path: true
+        paths:
+          - /auth/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: false
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
+
+  - name: rest-v1
+    url: http://rest:3000/
+    routes:
+      - name: rest-v1-all
+        strip_path: true
+        paths:
+          - /rest/v1/
+    plugins:
+      - name: cors
+      - name: key-auth
+        config:
+          hide_credentials: true
+      - name: acl
+        config:
+          hide_groups_header: true
+          allow:
+            - admin
+            - anon
