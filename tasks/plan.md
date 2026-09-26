@@ -627,11 +627,21 @@ access this environment doesn't have.
   ~13MB** — small enough that mirroring everything beats guessing at a
   subset. `SPEC-map.md` § Glyph Hosting has the corrected file count and
   a loop-based download script instead of a hardcoded list.
-- [ ] **Outstanding — not something this environment can do:** actually
-  uploading the 768 glyph files to the project's real Cloudflare R2
-  bucket and setting `EXPO_PUBLIC_GLYPHS_URL` in the real
-  `frontend/.env`. No Cloudflare credentials, `wrangler`, `rclone`, or
-  `aws` CLI available here.
+- [x] **Uploaded (2026-09-26):** all 768 glyph files uploaded to the real
+  `freipark-tiles` R2 bucket (`fonts/{NotoSansRegular,NotoSansMedium,NotoSansItalic}/{range}.pbf`,
+  256 objects per font, via AWS CLI against R2's S3-compatible endpoint
+  using a user-supplied, bucket-scoped API token) and `EXPO_PUBLIC_GLYPHS_URL`
+  set in the real `frontend/.env`. Verified via `aws s3 ls` (768 objects)
+  and a public-URL fetch of the previously-buggy `8192-8447` range (200,
+  correct content-type). See `SPEC-map.md` § Glyph Hosting.
+  **On-device verification against the real bucket — done (2026-09-26):**
+  ran the dev-client on iOS Simulator via `npx expo run:ios`; confirmed
+  Berlin map labels render correctly with German diacritics (ß, ö) and
+  zero glyph-loading errors in device logs, using the real
+  `EXPO_PUBLIC_GLYPHS_URL` (no local stand-in server). See `SPEC-map.md`
+  § Glyph Hosting for detail. Along the way, fixed an unrelated stale
+  Homebrew `node` path in the untracked `ios/.xcode.env.local` that was
+  blocking the native build.
 - [x] **Cleanup:** the throwaway local HTTP server and temporary
   `EXPO_PUBLIC_GLYPHS_URL` test value were removed after the first
   verification pass; `frontend/.env` is back to its pre-test state;

@@ -435,19 +435,35 @@ for i in $(seq 0 255); do
 done
 ```
 
-**Still needed (dashboard/infra access this environment doesn't have):**
-someone with Cloudflare R2 write access must actually upload the 768
-files and set `EXPO_PUBLIC_GLYPHS_URL` in the real `frontend/.env`.
-Upload to the same R2 bucket that hosts `berlin.pmtiles`, under an
-object-key path that preserves the `{fontstack}/{range}.pbf` structure
-with the *no-space* names (e.g. `wrangler r2 object put
-freipark-tiles/fonts/NotoSansRegular/0-255.pbf --file=...`, repeated per
-file — or a loop/`rclone sync` if uploading all 768 by hand isn't
-practical), then set:
+**Done (2026-09-26):** all 768 files uploaded to the `freipark-tiles`
+bucket under `fonts/{NotoSansRegular,NotoSansMedium,NotoSansItalic}/{range}.pbf`
+via the AWS CLI against R2's S3-compatible endpoint (256 objects per font,
+verified via `aws s3 ls`). Spot-checked the public URL for range
+`8192-8447` (the € / General Punctuation range that caused the earlier
+scope-correction bug) — returns `200` with `content-type:
+application/x-protobuf`. `frontend/.env` now sets:
 
 ```
-EXPO_PUBLIC_GLYPHS_URL=https://pub-<hash>.r2.dev/fonts/{fontstack}/{range}.pbf
+EXPO_PUBLIC_GLYPHS_URL=https://pub-8560c232359c4bc7a276e8947b05b75b.r2.dev/fonts/{fontstack}/{range}.pbf
 ```
+
+**On-device verification against the real R2 mirror — done (2026-09-26):**
+built and ran the dev-client on iOS Simulator (iPhone 17, iOS 26.5) via
+`npx expo run:ios`, with `frontend/.env`'s real `EXPO_PUBLIC_GLYPHS_URL`
+(no local stand-in server this time). Confirmed on-screen over central
+Berlin: all labels render correctly, including German diacritics —
+`ß` (Wisbyer Straße, Danziger Straße, Skalitzer Straße, Yorckstraße,
+Gneisenaustraße, Urbanstraße) and `ö` (Bremer Höhe). Device/Metro logs
+show zero `Failed to load glyph range` errors for the full session. The
+`[useSpots] RPC error` toast visible in this run is unrelated — this
+sandbox can't resolve the live Supabase hostname — and is not a glyph or
+map-rendering issue.
+
+*(Hit and fixed one unrelated build blocker along the way:
+`ios/.xcode.env.local` — untracked, local-only — pinned a stale Homebrew
+node path from a prior node version; updated it to resolve `node`
+dynamically via `command -v node` so it doesn't break on the next
+Homebrew node upgrade.)*
 
 The complete-set mirror already covers every script in the Basic
 Multilingual Plane for these 3 fonts, so expanding to non-Latin-script
