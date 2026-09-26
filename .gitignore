@@ -2,6 +2,7 @@
 .env
 *.env
 !*.env.example
+*.env.staging
 
 # Supabase CLI local state
 supabase/.temp/

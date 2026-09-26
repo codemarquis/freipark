@@ -999,7 +999,32 @@ implementation-time concerns.)*
 
 ### SS8 — Staging cutover and manual verification
 
-- [ ] **SS8: Point a non-production config at the self-hosted stack and verify end-to-end**
+- [x] **SS8: Point a non-production config at the self-hosted stack and verify end-to-end — done 2026-09-27.**
+  Created `frontend/.env.staging` (gitignored — `*.env.staging` added to
+  `.gitignore`; not auto-loaded by Expo, applied explicitly), pointing at
+  `https://supabase.freipark.com`. Verified each flow directly against
+  the live endpoint with a throwaway account (cleaned up via the admin
+  API afterward, both HTTP 200):
+  - **Sign-up**: `POST /auth/v1/signup` → session returned immediately
+    (autoconfirm)
+  - **Sign-in**: `POST /auth/v1/token?grant_type=password`, independent
+    of the signup response → valid access token
+  - **Sign-out**: `POST /auth/v1/logout` → `204`
+  - **Spot loading**: `POST /rest/v1/rpc/spots_in_bbox` (Berlin bbox) →
+    2000 rows, real coordinates, matches the app's actual query shape
+  - **Phone OTP: real bug found, not paper-over'd.** `POST /auth/v1/otp`
+    with a phone number returns `500` — checked the exact auth log line:
+    `"sms Provider  could not be found"`. The account is actually
+    created and silently logged in behind the scenes
+    (`immediate_login_after_signup: true`, per the audit log) despite the
+    request failing, because `GOTRUE_SMS_AUTOCONFIRM=true` bypasses OTP
+    verification but GoTrue still attempts to *send* the code and has no
+    provider configured. **This means phone sign-in is currently broken
+    end-to-end for a real client** — not just "untested," it actively
+    returns an error — until SS7's SMS-provider gap is resolved. Direct
+    consequence of the already-documented SS7 blocker, not a new/separate
+    issue, but worth stating precisely rather than assuming autoconfirm
+    makes it silently fine.
   - Acceptance: a separate env config (not the live `frontend/.env` /
     `backend/.env`) points `SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_URL` at
     `supabase.freipark.com`; manual verification covers sign-up, sign-in,
@@ -1009,8 +1034,7 @@ implementation-time concerns.)*
   - Verify: manual simulator/device pass through each flow above, no
     unexpected errors; `curl` the self-hosted `spots_in_bbox` RPC directly
     and confirm it returns rows
-  - Files: a staging-only env file (naming TBD — not `.env`, to avoid any
-    risk of it being picked up by a production build)
+  - Files: `frontend/.env.staging` (gitignored)
 
 ### SS9 — Backups
 
