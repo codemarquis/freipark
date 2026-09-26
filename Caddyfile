@@ -1,3 +1,11 @@
 api.freipark.com {
     reverse_proxy api:8000
 }
+
+# Self-hosted Supabase (SS4, see SPEC-infra.md § Self-Hosted Supabase
+# Migration (Proposed) and tasks/plan.md § SS4). Requires a DNS A record
+# for supabase.freipark.com pointing at the OVH box's IP before Caddy can
+# issue a certificate for it — not something this file controls.
+supabase.freipark.com {
+    reverse_proxy kong:8000
+}
