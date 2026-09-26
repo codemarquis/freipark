@@ -9,6 +9,13 @@ below. Supabase Auth, listed in the original objective, is **not yet
 implemented** — no `src/features/auth` exists; see `CLAUDE.md`'s module
 order (`infra → map → auth`) for where it fits next.
 
+**2026-09-26:** a self-hosted replacement for managed Supabase (same
+Postgres/PostGIS/Auth/RLS, run on the project's own OVH box instead of
+Supabase's cloud) is now specced — see § Self-Hosted Supabase Migration
+(Proposed) below. **Proposed only, not implemented** — the tables/RLS/env
+vars described elsewhere in this document still reflect the current,
+live, managed-Supabase setup.
+
 ---
 
 ## Objective
@@ -29,8 +36,8 @@ This module produces no user-visible UI. Success means: any other module can con
 
 | Layer | Choice | Rationale |
 |---|---|---|
-| Database | Supabase (PostgreSQL 15 + PostGIS) | Managed Postgres, free 500MB, built-in auth, RLS, no per-query cost |
-| Auth | Supabase Auth (email+password) | 50k MAU free; cross-device JWT; single vendor with DB. **Not yet implemented.** |
+| Database | Supabase (PostgreSQL 15 + PostGIS) | Managed Postgres, free 500MB, built-in auth, RLS, no per-query cost. **Self-hosting proposed** — see § Self-Hosted Supabase Migration (Proposed) |
+| Auth | Supabase Auth (email+password) | 50k MAU free; cross-device JWT; single vendor with DB. **Self-hosting proposed** — see § Self-Hosted Supabase Migration (Proposed) |
 | Map tile storage | Cloudflare R2 | No egress fees (unlike S3); PMTiles served via HTTP range requests |
 | Backend runtime | FastAPI (Python 3.12) | Async, Pydantic, strong PostGIS ecosystem |
 | Schema migrations | Supabase CLI (`supabase db push`) | Version-controlled SQL files in `supabase/migrations/` |
@@ -372,6 +379,187 @@ full Germany extraction, partitioning, and customization takes hours on
 first run and produces a multi-GB dataset on the `osrm_data` volume. This
 is a real infra cost (disk + one-time compute), even though it's not a
 *per-call* cost — worth knowing before spinning up a fresh environment.
+
+---
+
+## Self-Hosted Supabase Migration (Proposed)
+
+*(Proposed 2026-09-26 — not yet implemented. Nothing in this section
+exists in `docker-compose.yml`, `backend/.env`, or `frontend/.env` yet;
+this is the spec to build against, per `CLAUDE.md`'s spec-first rule.)*
+
+### Why
+
+Three concerns, all tied to real events rather than hypotheticals:
+
+- **Free-tier auto-pause.** The managed Supabase project paused itself
+  from inactivity during this project's own work session, breaking
+  `pytest tests/test_db.py` and any live client until manually resumed
+  from the dashboard. Unacceptable for an app with unpredictable usage
+  gaps.
+- **Cost at scale.** `CLAUDE.md`'s hard constraint — "No per-call API
+  costs that scale with user growth" — is in direct tension with
+  Supabase's usage-based billing components (bandwidth, MAU-based Auth
+  pricing beyond the included allowance) once usage grows past free/Pro
+  tier limits.
+- **Vendor lock-in / control.** Keep the same DB engine, the same RLS
+  model, the same client contract — but own the box it runs on, the same
+  way this project already owns OSRM instead of paying a per-call routing
+  API (§ Routing infra above).
+
+### Why the existing OVH box, not new infrastructure
+
+FreiPark already self-hosts OSRM there for the identical reason (zero
+per-call cost). Resource headroom was checked before proposing this
+(2026-09-26), not assumed:
+
+| Resource | Total | In use | Free |
+|---|---|---|---|
+| CPU | 8 vCPUs | ~2% (OSRM mostly idle) | effectively all of it |
+| RAM | 22GB | 5.3GB (OSRM ≈4.6GB is the bulk of it) | 17GB |
+| Disk | 193GB | 16GB | 178GB |
+
+A lean self-hosted Supabase stack (below) typically runs under 2GB RAM
+combined and a few hundred MB of disk for the software itself — leaves
+ample headroom alongside `osrm-germany`/`caddy`/`api` without resource
+contention.
+
+### What actually needs to run
+
+Confirmed by grepping `frontend/src` and `backend` for `supabase.storage`,
+`.channel(`, and `supabase.realtime` — **zero matches.** This app only
+touches four pieces of the Supabase surface: Postgres+PostGIS (schema,
+RLS), GoTrue (email+password and phone OTP auth), PostgREST
+(`supabase.rpc()`/`.from()` calls from `useSpots.ts`/`useAuth.ts`), and
+Kong as the API gateway that fronts both under `/rest/v1` and `/auth/v1`
+— the routes `@supabase/supabase-js` expects at whatever `SUPABASE_URL`
+points to.
+
+| Service | Image | Role | Exposed externally? |
+|---|---|---|---|
+| `db` | `supabase/postgres` | Postgres 15 + PostGIS, same extension set as managed Supabase | No — internal Compose network only |
+| `auth` | `supabase/gotrue` | Email+password, phone OTP (Twilio), JWT issuing | No — behind Kong |
+| `rest` | `postgrest/postgrest` | Auto-generated REST API over Postgres; enforces RLS | No — behind Kong |
+| `kong` | `kong` | API gateway: routes `/rest/v1/*` → `rest`, `/auth/v1/*` → `auth` | Yes — via Caddy |
+
+**Deliberately excluded:** Storage and Realtime (unused, confirmed above
+— not a schema-breaking addition later if that changes). Studio
+(dashboard UI — use `psql` directly for admin work; if ever needed,
+run it as a separate one-off compose file, never exposed publicly).
+Analytics/Logflare/Vector (managed Supabase's logging stack — resource-
+heavy, no current use case).
+
+### Integration with the existing stack
+
+Add these four services to the **existing** `docker-compose.yml` — same
+file, same Docker network as `osrm-germany`/`caddy`/`api`, not a separate
+compose project. Add one more Caddy route, mirroring the existing
+`api.freipark.com` block:
+
+```caddyfile
+# Caddyfile — additive, alongside the existing api.freipark.com block
+supabase.freipark.com {
+    reverse_proxy kong:8000
+}
+```
+
+`backend/.env` and `frontend/.env` then point at the new host instead of
+`*.supabase.co` — same variable names, new values:
+
+```
+SUPABASE_URL=https://supabase.freipark.com
+EXPO_PUBLIC_SUPABASE_URL=https://supabase.freipark.com
+```
+
+`@supabase/supabase-js` (frontend) and `psycopg2`/`asyncpg` (backend)
+don't care whether `SUPABASE_URL`/`DATABASE_URL` point at Supabase's cloud
+or a self-hosted Kong/Postgres instance — same REST/Auth contract, **zero
+app code changes** in `useAuth.ts`, `useSpots.ts`, `src/lib/supabase.ts`,
+`backend/db/connection.py`, or any RLS policy in `supabase/migrations/`.
+
+### JWT keys
+
+Self-hosted Supabase has no dashboard minting `anon`/`service_role` keys
+for you. Instead, you own a single `JWT_SECRET` and mint both keys
+yourself as JWTs signed with it (`role: anon` / `role: service_role`
+claims — Supabase's self-hosting docs have the exact payload shape). The
+resulting `EXPO_PUBLIC_SUPABASE_ANON_KEY` **still isn't a secret** — RLS
+enforces access exactly as it does today — only `JWT_SECRET` itself and
+the minted `service_role` key need `.env`-only, never-committed treatment
+(same rule already in § Environment Variables below).
+
+### Migration path (managed → self-hosted)
+
+1. Stand up the self-hosted stack against an **empty** Postgres; apply
+   every file in `supabase/migrations/` in order via `psql` — the same
+   SQL files already in this repo, no rewrite needed.
+2. `pg_dump --data-only` the managed project's `public` schema (`cities`,
+   `parking_spots`) and `auth.users`/`auth.identities` (GoTrue is the same
+   OSS software on both sides, so the dump is schema-compatible); restore
+   into the new instance.
+3. Re-run `backend/scripts/import_all.py` against the new instance as a
+   sanity check rather than trusting the dump alone — cheap and idempotent
+   (`ON CONFLICT (osm_id, osm_type) DO UPDATE`), catches any drift.
+4. Point a **separate staging config** (not the live `frontend/.env`) at
+   `supabase.freipark.com` and manually verify sign-in, sign-up, phone
+   OTP, and spot loading before touching production env vars.
+5. Cut over `backend/.env` and `frontend/.env`, redeploy.
+6. Keep the managed Supabase project **paused** (not deleted) for a
+   defined rollback window — paused projects don't bill, so this is a free
+   safety net. See § Open Questions for how long.
+
+### New operational responsibilities (the real cost of this move)
+
+Self-hosting means this project now owns what Supabase managed before:
+
+- **Backups.** No more automatic managed backups. Needs a `pg_dump` cron
+  job writing somewhere other than the same disk — e.g. the same
+  Cloudflare R2 bucket already used for tiles/glyphs (§ Cloudflare R2:
+  PMTiles Setup), since R2 has no egress cost either way.
+- **Version upgrades.** Postgres/GoTrue/PostgREST/Kong upgrades were
+  previously silent and managed; now a deliberate `docker compose pull &&
+  up -d` on a schedule, changelog read first.
+- **Box-level security patching.** Already true today for this VPS (it
+  already runs OSRM) — but the database now shares that same blast
+  radius, raising the stakes of keeping the host patched.
+- **Email/SMS provider config.** Brevo SMTP and Twilio, previously
+  Supabase dashboard fields, become `auth` container env vars
+  (`GOTRUE_SMTP_*`, `GOTRUE_SMS_TWILIO_*`) — same providers, same
+  credentials, different config surface.
+
+### Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Resource contention with OSRM under load | Low (see headroom table above) | `docker stats` monitoring; OSRM already has a fixed, bounded footprint |
+| Data loss or extended downtime during cutover | Medium if rushed | Staging validation first (§ Migration path step 4); managed project stays paused, not deleted, as rollback |
+| GoTrue self-hosted config drifts from the managed project's current dashboard settings (email templates, redirect URLs, OTP expiry) | Medium | Diff every `GOTRUE_*` env var against the managed project's Auth dashboard before cutover, not after |
+| Single VPS now runs routing **and** the database — one box, two critical dependencies | Medium, accepted for MVP scale | Out of scope to fix until real uptime requirements exist; documented here so it isn't forgotten later |
+
+### Success Criteria
+
+*(Unchecked — this is a proposal, not yet built.)*
+
+- [ ] `db`, `auth`, `rest`, `kong` services added to `docker-compose.yml`, running healthy alongside `osrm-germany`/`caddy`/`api`
+- [ ] Every file in `supabase/migrations/` applies cleanly to the new instance; `backend/tests/test_db.py`'s four tests pass against it
+- [ ] `cities` + `parking_spots` data migrated and verified (`import_all.py` re-run as a sanity check, not just a trusted dump)
+- [ ] `auth.users` migrated; existing accounts can still sign in post-cutover
+- [ ] Phone OTP (Twilio) and email (Brevo) both re-verified end-to-end against the self-hosted `auth` service, not assumed to carry over
+- [ ] Staging cutover validated (sign-in, sign-up, spot loading) before touching production `.env`
+- [ ] Backup cron job in place **and test-restored at least once** before the managed Supabase project is deleted (not just paused)
+- [ ] This file and `tasks/plan.md` updated to reflect the cutover once live, per this project's own reconciliation practice
+
+### Open Questions
+
+- How long should the managed Supabase project stay paused as a rollback
+  safety net before deletion? Proposed: 2 weeks post-cutover, revisit
+  based on how cutover actually goes.
+- Does Studio ever get run for admin convenience — and if so, how is it
+  kept off the public internet (SSH tunnel vs. a Caddy basic-auth gate)?
+  Not needed for MVP; only matters if hand-editing data becomes routine.
+- Backup restore testing cadence — an untested backup isn't a verified
+  backup. Needs an answer before this is considered production-ready,
+  not left as a someday task.
 
 ---
 
