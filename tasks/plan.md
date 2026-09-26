@@ -1014,7 +1014,39 @@ implementation-time concerns.)*
 
 ### SS9 — Backups
 
-- [ ] **SS9: Set up a `pg_dump` cron job writing to Cloudflare R2; prove it with a real restore**
+- [x] **SS9: Set up a `pg_dump` cron job writing to Cloudflare R2; prove it with a real restore — done 2026-09-27.**
+  **Discovered and fixed a bigger gap first:** the OVH box's self-hosted
+  `db` (deployed in SS4) had never actually received SS5/SS6's data —
+  those were only ever run against the *local* validation instance.
+  `parking_spots` was 0 on the box that's actually live at
+  `supabase.freipark.com`. Fixed by dumping the verified-correct data
+  from the local instance (same Postgres version both sides, no
+  17-vs-15 issue this time) and streaming it directly into the OVH box's
+  `db` container over SSH (no intermediate file written on the box) —
+  same "fix `cities`' UUIDs first, then data" sequence as SS6, this time
+  restored as `supabase_admin` with real triggers/FK enforcement on
+  throughout (no `--disable-triggers` this time — SS5/SS6's lesson
+  learned). OVH now matches exactly: 33 cities, 424,911 spots, 1 user.
+  **Backup script** (`supabase/self-host/backup_db.sh`, using the
+  `rclone` `r2:` remote already configured on the box — no new R2
+  credentials needed) initially used a full `pg_dump` (schema+data).
+  **That was wrong and caught by actually testing the restore**, not
+  assumed to work: restoring a full dump into a fresh `supabase/postgres`
+  instance fails with `schema "auth" already exists`, since the base
+  image creates that schema itself — a full dump's own `CREATE SCHEMA`
+  collides with it. Fixed to `--data-only`, scoped to the same four
+  tables SS5 migrated, matching the real disaster-recovery sequence:
+  fresh stack up → apply `supabase/migrations/*.sql` → GoTrue's own
+  startup migrations recreate `auth.users`/`identities` structure → this
+  backup's data restores cleanly on top.
+  **Verified end-to-end for real:** ran the corrected script on the OVH
+  box (52MB uploaded to `r2:freipark-tiles/backups/db/`), downloaded that
+  exact object back down, replayed the full real sequence on a from-
+  scratch scratch instance (fresh `supabase/postgres` container →
+  migrations applied → a throwaway `gotrue` container bootstrapped the
+  `auth` schema → backup restored) — **33/424,911/1 rows, exact match**,
+  including `auth.users`' `id`/`email`. Daily cron installed (`0 3 * * *`,
+  UTC, logs to `~/freipark-backup.log`).
   - Acceptance: a scheduled job dumps the self-hosted `db` and uploads to
     the `freipark-tiles` R2 bucket (or a dedicated backups bucket) on a
     regular cadence (daily, to start); at least one dump has been
@@ -1022,8 +1054,7 @@ implementation-time concerns.)*
     it's actually usable — an untested backup doesn't count as done
   - Verify: cron job's log shows successful runs; the test-restore step
     produces a working database with expected row counts
-  - Files: a new script (e.g. `backend/scripts/backup_db.sh` or similar —
-    exact location TBD when this task starts)
+  - Files: `supabase/self-host/backup_db.sh`
 
 ### SS10 — Production cutover
 
