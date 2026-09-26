@@ -863,7 +863,29 @@ implementation-time concerns.)*
 
 ### SS5 — Migrate data from managed to self-hosted
 
-- [ ] **SS5: `pg_dump` managed project, restore into self-hosted instance**
+- [x] **SS5: `pg_dump` managed project, restore into self-hosted instance — done 2026-09-26.**
+  `cities` needed no dump — both sides already have the identical 33 rows
+  from migrations, confirmed matching. Dumped `public.parking_spots`
+  (424,912 rows), `auth.users` (1), `auth.identities` (1) with
+  `--data-only --no-owner --disable-triggers`, restored into the
+  self-hosted instance. **Important, undocumented drift discovered along
+  the way:** the managed project is actually running **Postgres 17.6**,
+  not 15 as `CLAUDE.md`/`SPEC-infra.md` state — `pg_dump` 15 refused to
+  dump from it at all (`aborting because of server version mismatch`).
+  Used a Postgres 17 client (`docker run --rm postgres:17 pg_dump ...`)
+  to match the source, while the self-hosted *target* stays on the
+  documented 15.14 — the dump then needed 3 lines stripped
+  (`\restrict`/`\unrestrict`, `SET transaction_timeout`) that are
+  Postgres-17-only syntax the 15 target doesn't understand. Second real
+  issue: the self-hosted `postgres` role is **not** a superuser (Supabase's
+  own security model, replicated even self-hosted — confirmed via
+  `rolsuper = f`), so `--disable-triggers`' implicit `ALTER TABLE ...
+  DISABLE TRIGGER ALL` failed with "must be owner of table users";
+  restored as `supabase_admin` instead (the real superuser, `local ...
+  trust`-only per `pg_hba.conf`, reachable via the container's unix
+  socket). **Verified, not assumed:** all three row counts match exactly
+  (424912/1/1 both sides); `auth.users`' single row matches on both `id`
+  and `email`.
   - Acceptance: `public.cities` and `public.parking_spots` row counts
     match between managed and self-hosted after restore; `auth.users` and
     `auth.identities` restored with matching row counts and matching
