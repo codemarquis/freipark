@@ -1082,7 +1082,36 @@ implementation-time concerns.)*
 
 ### SS10 — Production cutover
 
-- [ ] **SS10: Update `backend/.env` and `frontend/.env`; redeploy**
+- [x] **SS10: Update `backend/.env` and `frontend/.env`; redeploy — done 2026-09-27.**
+  Updated both local `.env` files (`SUPABASE_URL`/`EXPO_PUBLIC_SUPABASE_URL`
+  → `https://supabase.freipark.com`, anon/service-role keys → self-hosted,
+  `DATABASE_URL` → self-hosted, `ENVIRONMENT=production`) — managed values
+  kept as commented `MANAGED_*` reference lines for SS11's rollback, not
+  deleted.
+  **Real incident during deployment, not a config mistake:** applying the
+  same change to the OVH box's `backend/.env` via a pasted multi-line
+  heredoc script corrupted the file — the terminal reflowed/indented the
+  paste, so bash's `cat >> ... <<'EOF'` never matched its (now-indented)
+  closing delimiter and kept consuming everything pasted afterward —
+  including an entire second script — as literal file content. Caught via
+  `cat -A` (showing exact line endings) rather than assumed fixed;
+  recovered from the `cp backend/.env backend/.env.pre-ss10-backup` taken
+  at the start of that same script. Redone with a **fully heredoc-free**
+  method: built the exact target file locally, base64-encoded it, and had
+  the user run one line (`echo <blob> | base64 -d > backend/.env`) — no
+  quotes, no regex, no multi-line paste risk. Verified byte-for-byte via
+  `cat -A` before proceeding. Also removed one *pre-existing*, harmless
+  piece of corruption from an earlier (SS7) session's similar heredoc
+  mishap (a stray literal `cat >> ... <<'EOF'` line sitting in the file,
+  silently ignored by env parsers but cleaned up while already in there).
+  **Redeployed and verified for real:** `docker compose up -d
+  --force-recreate api` on the OVH box; `GET https://api.freipark.com/health/db`
+  → `total_spots: 424911` with the full 33-city breakdown, confirming
+  `api` is genuinely reading the self-hosted database now, not managed.
+  Did not re-run SS8's full sign-up/sign-in/sign-out battery — those
+  already exercise the identical `supabase.freipark.com` endpoints now
+  live in "production" config; the only new surface SS10 introduces is
+  `api`'s own `DATABASE_URL`, which `/health/db` just confirmed directly.
   - Acceptance: `SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_URL`, and
     `DATABASE_URL` all point at the self-hosted stack; app rebuilt/redeployed;
     every SS8 verification repeated once more against production config
@@ -1091,22 +1120,42 @@ implementation-time concerns.)*
     values this time
   - Files: `backend/.env`, `frontend/.env` (both local-only, never
     committed)
-  - **Gate:** do not start this task until SS8 and SS9 are both checked
-    off above.
 
 ### SS11 — Rollback window
 
-- [ ] **SS11: Keep the managed Supabase project paused (not deleted) for a defined window post-cutover**
+- [ ] **SS11: Keep the managed Supabase project paused (not deleted) for a defined window post-cutover — started 2026-09-27, cannot complete today (hard 2-week time gate).**
+  Cutover (SS10) landed 2026-09-27 — the 2-week rollback window starts
+  from this date, proposed elapse ~2026-10-11. **Manual step still
+  outstanding, not done in this session:** actually pausing the managed
+  project is a Supabase dashboard action — no Management API token was
+  configured in this session to do it programmatically, and pausing a
+  live project isn't something to do unilaterally without the project
+  owner's explicit action. Until paused, note it's just sitting idle
+  (no longer receiving traffic — `backend/.env`/`frontend/.env` point at
+  self-hosted now — but its own free-tier auto-pause behavior, the
+  original SS1 trigger for this whole migration, will likely pause it
+  from inactivity anyway).
   - Acceptance: managed project left paused; monitoring in place on the
     self-hosted stack for the duration (container health, disk usage,
     error rates) to catch anything SS8's manual pass missed
   - Verify: window elapses (see `SPEC-infra.md` § Open Questions —
     proposed 2 weeks) with no rollback needed
   - Files: none
+  - **Resume:** pause the managed project manually (dashboard); watch
+    self-hosted container health/error rates until ~2026-10-11; if clean,
+    proceed to SS12's deletion decision.
 
 ### SS12 — Documentation and managed-project decision
 
-- [ ] **SS12: Update `SPEC-infra.md` and this file to reflect the completed cutover; decide on deleting the managed project**
+- [x] **SS12: Update `SPEC-infra.md` and this file to reflect the completed cutover — docs done 2026-09-27; managed-project deletion deferred to SS11's elapse.**
+  Updated `SPEC-infra.md`'s top status line, Tech Stack table (Database/Auth
+  rows now say "Live since 2026-09-27" instead of "proposed"), the
+  § Self-Hosted Supabase Migration section header (dropped "(Proposed)"),
+  and added a note to § Environment Variables pointing at the real live
+  values. **Managed project decision:** not deleted — can't be, until
+  SS11's ~2026-10-11 window elapses cleanly. This checkbox covers the
+  documentation half of SS12 only; the deletion decision itself is SS11's
+  own resume step, not duplicated here.
   - Acceptance: `SPEC-infra.md`'s Tech Stack table, Environment Variables
     section, and this plan's checkboxes all reflect self-hosted Supabase
     as the live setup, not a proposal; managed project either deleted (if

@@ -9,12 +9,17 @@ below. Supabase Auth, listed in the original objective, is **not yet
 implemented** — no `src/features/auth` exists; see `CLAUDE.md`'s module
 order (`infra → map → auth`) for where it fits next.
 
-**2026-09-26:** a self-hosted replacement for managed Supabase (same
-Postgres/PostGIS/Auth/RLS, run on the project's own OVH box instead of
-Supabase's cloud) is now specced — see § Self-Hosted Supabase Migration
-(Proposed) below. **Proposed only, not implemented** — the tables/RLS/env
-vars described elsewhere in this document still reflect the current,
-live, managed-Supabase setup.
+**2026-09-27:** self-hosted Supabase (same Postgres/PostGIS/Auth/RLS, run
+on the project's own OVH box instead of Supabase's cloud) is now **live
+in production** — `backend/.env`/`frontend/.env` point at
+`https://supabase.freipark.com`, not managed Supabase. See § Self-Hosted
+Supabase Migration below for the full build-out (SS1–SS10 all done;
+SS7's email/SMS delivery still blocked externally — see that section's
+own status). The managed project is kept as a rollback safety net through
+~2026-10-11 (`tasks/plan.md` § SS11), not deleted yet. Tables/RLS
+structure described elsewhere in this document are identical on both
+sides (same migrations applied to both) — only the connection endpoint
+changed.
 
 ---
 
@@ -36,8 +41,8 @@ This module produces no user-visible UI. Success means: any other module can con
 
 | Layer | Choice | Rationale |
 |---|---|---|
-| Database | Supabase (PostgreSQL 15 + PostGIS) | Managed Postgres, free 500MB, built-in auth, RLS, no per-query cost. **Self-hosting proposed** — see § Self-Hosted Supabase Migration (Proposed) |
-| Auth | Supabase Auth (email+password) | 50k MAU free; cross-device JWT; single vendor with DB. **Self-hosting proposed** — see § Self-Hosted Supabase Migration (Proposed) |
+| Database | Self-hosted Supabase (PostgreSQL 15 + PostGIS, `supabase/postgres` on the OVH box) | **Live since 2026-09-27** — see § Self-Hosted Supabase Migration. Was managed Supabase (kept as rollback safety net through ~2026-10-11) |
+| Auth | Self-hosted Supabase Auth (GoTrue, email+password + phone OTP) | **Live since 2026-09-27.** Email/phone real delivery still blocked (SS7) — autoconfirm on for both in the meantime |
 | Map tile storage | Cloudflare R2 | No egress fees (unlike S3); PMTiles served via HTTP range requests |
 | Backend runtime | FastAPI (Python 3.12) | Async, Pydantic, strong PostGIS ecosystem |
 | Schema migrations | Supabase CLI (`supabase db push`) | Version-controlled SQL files in `supabase/migrations/` |
@@ -382,11 +387,14 @@ is a real infra cost (disk + one-time compute), even though it's not a
 
 ---
 
-## Self-Hosted Supabase Migration (Proposed)
+## Self-Hosted Supabase Migration
 
-*(Proposed 2026-09-26 — not yet implemented. Nothing in this section
-exists in `docker-compose.yml`, `backend/.env`, or `frontend/.env` yet;
-this is the spec to build against, per `CLAUDE.md`'s spec-first rule.)*
+**Live in production since 2026-09-27.** Specced 2026-09-26, built and
+cut over 2026-09-26/27 — SS1–SS10 all done, see `tasks/plan.md` § SS1–SS12
+for the full build log, real bugs hit and fixed along the way, and
+current status of SS7 (email/SMS delivery — blocked externally, autoconfirm
+on) and SS11 (rollback window, in progress through ~2026-10-11). The
+sections below describe what was actually built, not a proposal.
 
 ### Why
 
@@ -564,6 +572,18 @@ Self-hosting means this project now owns what Supabase managed before:
 ---
 
 ## Environment Variables
+
+**Live values changed 2026-09-27 (SS10):** the actual `backend/.env` and
+`frontend/.env` now hold self-hosted values (`SUPABASE_URL`=
+`https://supabase.freipark.com`, `DATABASE_URL` pointing at the `db`
+container over the OVH box's internal Docker network), not the managed
+values shown in the templates below. The `.env.example` templates
+weren't rewritten to a self-hosted shape — they still document the
+managed-Supabase format, since that's still a valid way to run this
+project (e.g. local dev against a fresh managed project) and self-hosted
+setup is its own documented flow (§ Self-Hosted Supabase Migration
+above, `supabase/self-host/`). Managed values are preserved as commented
+`MANAGED_*` lines in the real `.env` files for SS11's rollback window.
 
 ### `backend/.env.example`
 
