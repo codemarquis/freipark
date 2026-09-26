@@ -943,7 +943,43 @@ implementation-time concerns.)*
 
 ### SS7 — Email and phone OTP configuration
 
-- [ ] **SS7: Configure `GOTRUE_SMTP_*` (Brevo) and `GOTRUE_SMS_TWILIO_*` env vars**
+- [ ] **SS7: Configure `GOTRUE_SMTP_*` (Brevo) and `GOTRUE_SMS_TWILIO_*` env vars — blocked, not done, attempted 2026-09-26/27.**
+  **Premise corrected first:** neither Brevo nor Twilio/MessageBird was
+  ever actually configured on the *managed* project's dashboard — both
+  were only decided/documented in `SPEC-auth.md`, dashboard+DNS work never
+  executed. So there was nothing live to replicate; this became "set up
+  for real, for the first time" rather than "migrate existing config."
+  **Email (Brevo):** `GOTRUE_SMTP_*` wired into `docker-compose.yml`'s
+  `auth` service, secrets added to `backend/.env`/root `.env`. First
+  attempt used a key value that turned out to be a misread Twilio
+  Account SID + Auth Token pasted together (caught via a real test:
+  `POST /auth/v1/recover` returned `535 "Authentication failed"` from
+  Brevo — verified the actual failure, didn't just assume the config was
+  right). **Blocked externally**: Brevo won't issue an SMTP key for this
+  account for ~48h (their own anti-abuse hold on new accounts). Reverted
+  `GOTRUE_MAILER_AUTOCONFIRM` to `"true"` so sign-up keeps working without
+  real delivery in the meantime — `GOTRUE_SMTP_*` env vars stay defined
+  against a placeholder key, so finishing this later is a one-line swap
+  plus flipping autoconfirm back off.
+  **Phone (Twilio → MessageBird, in that order of attempt):**
+  Twilio Account SID + Auth Token obtained, but GoTrue's Twilio provider
+  requires a **Messaging Service SID**, which Twilio's trial tier won't
+  issue without a paid upgrade — a real platform limitation, not a config
+  mistake. Tried MessageBird next (already this project's own documented
+  long-term choice per `SPEC-auth.md`) — but MessageBird has rebranded to
+  "Bird" and its current dashboard only issues new-platform-API keys
+  (`bk_eu1_...`, Bearer auth against `eu1.platform.bird.com`), while
+  GoTrue's built-in `messagebird` provider is hardcoded against the
+  *legacy* `rest.messagebird.com` REST API (`Authorization: AccessKey`).
+  **Verified the incompatibility directly**, not assumed: tested the new
+  key against the legacy API's side-effect-free `/balance` endpoint —
+  `401 "incorrect access_key"`. Confirmed the dashboard's key-creation
+  flow (scopes: Email/SMS/WhatsApp/Verify/etc.) is new-platform-only, no
+  legacy key option exists. **GoTrue's built-in MessageBird provider is a
+  dead end for any new Bird account** until either GoTrue ships new-API
+  support or Bird restores legacy key issuance — worth flagging upstream
+  if this matters later. `GOTRUE_SMS_AUTOCONFIRM` left at `"true"`
+  (unchanged) — phone sign-in works, no real OTP delivery yet.
   - Acceptance: every relevant setting from the managed project's Auth
     dashboard (SMTP host/port/user, sender address, Twilio Account
     SID/Auth Token/from-number, OTP expiry, redirect URLs) has a
@@ -954,6 +990,12 @@ implementation-time concerns.)*
     arrive
   - Files: `docker-compose.yml` (`auth` service `environment:` block),
     `.env` (secrets)
+  - **Resume later:** (1) Brevo — wait out the 48h hold, get the real SMTP
+    key, swap `BREVO_SMTP_KEY`'s placeholder, flip `GOTRUE_MAILER_AUTOCONFIRM`
+    back to `"false"`, re-test `/auth/v1/recover`. (2) Phone — either pay
+    Twilio's minimum top-up for a Messaging Service, or wait for
+    GoTrue/Bird compatibility, or evaluate a different GoTrue-supported
+    provider (Vonage) not yet tried.
 
 ### SS8 — Staging cutover and manual verification
 
