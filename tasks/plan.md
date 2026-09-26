@@ -832,7 +832,25 @@ implementation-time concerns.)*
 
 ### SS4 — Caddy route for the self-hosted gateway
 
-- [ ] **SS4: Add `supabase.freipark.com` reverse-proxy block**
+- [x] **SS4: Add `supabase.freipark.com` reverse-proxy block — done 2026-09-26.**
+  DNS A record added by the user; deployed to the OVH box (`git pull` +
+  bringing up `db`/`auth`/`rest`/`kong` + migrations, all via the same
+  commands proven locally in SS2/SS3). Hit one real bug: `caddy reload`
+  kept reporting "config is unchanged" even after the new `Caddyfile`
+  landed on disk — root cause was a stale single-file bind mount, a known
+  Docker gotcha: `git pull` replaces a tracked file via unlink+rename (a
+  new inode), but a container's bind mount to an individual file (not a
+  directory) can stay pinned to the old inode, so the running `caddy`
+  container kept reading the pre-pull, single-block file no matter how
+  many times it was told to reload. Fixed with `docker compose up -d
+  --force-recreate caddy` (recreating the container re-establishes the
+  mount) — a plain `reload` or `restart` would not have fixed this.
+  **Externally verified, not just deployed:** `https://supabase.freipark.com/rest/v1/`
+  → `200` with a real Let's Encrypt cert (`via: 1.1 Caddy`, `via: 1.1
+  kong/3.9.3`, `server: postgrest/16.4`) and the full migrated OpenAPI
+  schema; `https://supabase.freipark.com/auth/v1/health` → `200`;
+  confirmed `https://api.freipark.com/health/db` still returns `200`
+  after the caddy recreate — no regression to the existing route.
   - Acceptance: `Caddyfile` has a new block proxying to `kong:8000`,
     additive to the existing `api.freipark.com` block; once deployed to
     the OVH box, `curl -I https://supabase.freipark.com/rest/v1/` returns
