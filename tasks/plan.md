@@ -883,9 +883,22 @@ implementation-time concerns.)*
   DISABLE TRIGGER ALL` failed with "must be owner of table users";
   restored as `supabase_admin` instead (the real superuser, `local ...
   trust`-only per `pg_hba.conf`, reachable via the container's unix
-  socket). **Verified, not assumed:** all three row counts match exactly
-  (424912/1/1 both sides); `auth.users`' single row matches on both `id`
-  and `email`.
+  socket).
+  **Correction (found during SS6, same day):** row counts matching was
+  not sufficient verification — `--disable-triggers` disables Postgres's
+  *internal* FK-check triggers too, so 424,912 `parking_spots` rows were
+  silently accepted despite referencing `city_id` values that don't exist
+  in self-hosted's `cities` table. Root cause: `cities` was populated via
+  the plain SQL migrations (`gen_random_uuid()` defaults), so it got
+  entirely different UUIDs per row than managed's `cities`, even though
+  `slug`/`name`/row count all matched — the row-count check gave false
+  confidence. Real fix, done as part of SS6: dumped `public.cities` from
+  managed (preserving real UUIDs), truncated and restored self-hosted's
+  `cities` with those, truncated the referentially-broken
+  `parking_spots`, then let SS6's OSM re-import fully repopulate it fresh
+  — see SS6 below for the corrected end state. `auth.users`/`identities`
+  were unaffected by this bug (no FK to `cities`); those two remain
+  correctly verified as stated above.
   - Acceptance: `public.cities` and `public.parking_spots` row counts
     match between managed and self-hosted after restore; `auth.users` and
     `auth.identities` restored with matching row counts and matching
@@ -897,7 +910,28 @@ implementation-time concerns.)*
 
 ### SS6 — Sanity-check import
 
-- [ ] **SS6: Re-run `import_all.py` against the self-hosted instance**
+- [x] **SS6: Re-run `import_all.py` against the self-hosted instance — done 2026-09-26.**
+  First run failed on every one of the 33 cities with
+  `ForeignKeyViolation: ... city_id ... is not present in table "cities"`
+  — this is what actually surfaced the SS5 `cities`-UUID bug documented
+  above (SS6 wasn't a clean no-op check as originally planned; it caught
+  a real bug SS5's own verification missed). After fixing `cities` (see
+  SS5's correction note), re-ran the full import: **all 33 cities
+  imported successfully, zero failures.** All PBFs were already cached
+  locally from prior work (~5.4GB, no re-download needed) — real per-city
+  `inserted`/`updated` counts, e.g. wiesbaden `inserted=2116,
+  updated=1959` (not the all-zero "nothing changed" result the task
+  originally expected, since `parking_spots` had just been truncated as
+  part of the SS5 fix, making this a fresh full import rather than a
+  no-op idempotency check).
+  Final count: self-hosted **424,911** vs managed **424,912** —
+  identified the exact single-row difference (diffed the full
+  `osm_id`/`osm_type` lists, not just counts): OSM node `8841848872`
+  (Berlin, `amenity=parking`) exists in managed but not in the cached
+  Berlin PBF used for this re-import. Consistent with ordinary OSM data
+  drift between whenever managed was originally populated and whenever
+  the local PBF cache (dated 22 Aug) was downloaded — not a bug in this
+  pipeline, and not chased further given 1-in-425,000 materiality.
   - Acceptance: `python backend/scripts/import_all.py` (pointed at the
     self-hosted `DATABASE_URL`) completes with `inserted: 0` for every
     city if SS5's dump was complete — any non-zero `inserted` count means
