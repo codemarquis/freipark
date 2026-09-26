@@ -74,7 +74,7 @@ services:
       osrm-germany:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health/db || exit 1"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health/db').status == 200 else 1)"]
       interval: 30s
       timeout: 10s
       retries: 3
