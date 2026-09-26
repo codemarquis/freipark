@@ -691,3 +691,222 @@ access this environment doesn't have.
   association bug (confirmed: correct once triggered, every time). Not
   investigated further given time already spent; worth a look if it
   turns out to bother real users.
+
+---
+---
+
+# Implementation Plan: self-hosted Supabase migration
+
+**Spec:** [SPEC-infra.md](../SPEC-infra.md) § Self-Hosted Supabase Migration (Proposed)
+**Module:** `infra` (replaces the managed-Supabase portion of it)
+**Build position:** Independent of `map`/`auth` feature work — this is a
+backing-store swap behind the same client contract. Safe to build and
+validate in parallel with other modules, but the **production cutover**
+step (SS10) should land as its own isolated change, not bundled with
+unrelated feature work.
+**Status:** Not started. Every task below is unchecked.
+
+---
+
+## Dependency Graph
+
+```
+[SS1] JWT secret + mint anon/service_role keys
+   └──▶ [SS2] Add db/auth/rest/kong services to docker-compose.yml
+           ├──▶ [SS3] Apply supabase/migrations/*.sql; verify test_db.py against new instance
+           │       └──▶ [SS5] Migrate data (pg_dump managed → restore self-hosted)
+           │               └──▶ [SS6] Re-run import_all.py as sanity check ───────────┐
+           ├──▶ [SS4] Caddy route: supabase.freipark.com ──────────────────────────────┤
+           └──▶ [SS7] GoTrue email (Brevo) + phone OTP (Twilio) config ────────────────┤
+                                                                                         ├──▶ [SS8] Staging cutover + manual verification
+[SS9] Backup cron job + test-restore (independent of SS3–SS7, gates SS10) ──────────────┘         └──▶ [SS10] Production cutover ──▶ [SS11] Rollback window / monitor ──▶ [SS12] Docs + managed-project decision
+```
+
+SS1 is the critical-path start. SS3, SS4, and SS7 all fan out from SS2 and
+can proceed in parallel. SS9 (backups) has no dependency on the data
+migration at all — do it early, since SS10 (production cutover) is gated
+on it existing and having been proven with an actual restore, not just
+configured.
+
+---
+
+## Risks
+
+*(Carried over from `SPEC-infra.md`'s Risks table, restated here as
+implementation-time concerns.)*
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Resource contention with OSRM under load | Low — headroom already checked (17GB RAM / 178GB disk free) | Watch `docker stats` during SS8 staging load-testing |
+| Data loss or extended downtime during cutover | Medium if rushed | SS8 (staging) must pass before SS10 (production); managed project stays paused, not deleted, through SS11 |
+| GoTrue config drifts from the managed project's current Auth dashboard settings | Medium | SS7 explicitly diffs every `GOTRUE_*` env var against the live dashboard before SS8, not after |
+| `JWT_SECRET` or minted `service_role` key committed by accident | Low, but severe if it happens | Both go in `backend/.env`/`.env` only, per this repo's existing "never commit secrets" rule; add to `.gitignore` patterns if not already covered by the blanket `*.env` rule |
+| Backup never actually tested | Medium (easy to configure and never verify) | SS9's acceptance criterion explicitly requires a real restore, not just a cron job existing |
+
+---
+
+## Tasks
+
+### SS1 — JWT secret and keys
+
+- [ ] **SS1: Generate `JWT_SECRET`; mint `anon` and `service_role` JWTs signed with it**
+  - Acceptance: a securely-generated `JWT_SECRET` exists (32+ bytes,
+    random); both keys minted per Supabase's self-hosting key-generation
+    process (`role: anon` / `role: service_role` claims), decodable and
+    verifiable against `JWT_SECRET`
+  - Verify: decode each minted JWT (e.g. with `jwt.io` or `python -c
+    "import jwt; print(jwt.decode(token, secret, algorithms=['HS256']))"`)
+    and confirm the `role` claim matches
+  - Files: none committed — `JWT_SECRET` and the `service_role` key are
+    `.env`-only; `anon` key isn't secret but still lives in `.env` next to
+    the others for consistency until SS8/SS10 promote it into
+    `frontend/.env`
+
+### SS2 — Add self-hosted services to `docker-compose.yml`
+
+- [ ] **SS2: Add `db`, `auth`, `rest`, `kong` services**
+  - Acceptance: `docker compose up -d db auth rest kong` (local dev
+    machine or a scratch environment — **not the OVH box yet**) brings up
+    all four healthy; `kong` reachable on its container port; `rest`
+    responds to an unauthenticated `GET /` per PostgREST's default root
+    response; `auth` responds to `GET /health` per GoTrue's own
+    healthcheck endpoint
+  - Verify: `docker compose ps` shows all four `healthy`; `curl
+    localhost:<kong-port>/rest/v1/` returns PostgREST's OpenAPI root, not
+    a connection error
+  - Files: `docker-compose.yml`
+
+### SS3 — Apply migrations to the new instance
+
+- [ ] **SS3: Run every `supabase/migrations/*.sql` file against the new `db` service, in order**
+  - Acceptance: all five migration files (`001`–`005`) apply without
+    error; `backend/tests/test_db.py`'s four tests pass when pointed at
+    this instance via a temporary `DATABASE_URL` override
+  - Verify: `psql $NEW_DATABASE_URL -f supabase/migrations/001_initial_schema.sql`
+    (repeat per file) exits 0 each time; `DATABASE_URL=<new> pytest
+    backend/tests/test_db.py -v` — 4 passed
+  - Files: none new — reuses existing `supabase/migrations/`
+
+### SS4 — Caddy route for the self-hosted gateway
+
+- [ ] **SS4: Add `supabase.freipark.com` reverse-proxy block**
+  - Acceptance: `Caddyfile` has a new block proxying to `kong:8000`,
+    additive to the existing `api.freipark.com` block; once deployed to
+    the OVH box, `curl -I https://supabase.freipark.com/rest/v1/` returns
+    a response from Kong/PostgREST, not a Caddy 404
+  - Verify: manual `curl` from outside the box after deploy; Caddy logs
+    show automatic TLS issued for the new subdomain
+  - Files: `Caddyfile`
+  - Prereq: DNS record for `supabase.freipark.com` pointing at the OVH
+    box's IP (manual, outside this repo)
+
+### SS5 — Migrate data from managed to self-hosted
+
+- [ ] **SS5: `pg_dump` managed project, restore into self-hosted instance**
+  - Acceptance: `public.cities` and `public.parking_spots` row counts
+    match between managed and self-hosted after restore; `auth.users` and
+    `auth.identities` restored with matching row counts and matching
+    `id` values (so existing user sessions can still resolve post-cutover)
+  - Verify: `SELECT count(*) FROM cities` / `parking_spots` / `auth.users`
+    match on both sides; spot-check a handful of specific rows by `id`
+  - Files: none committed — a one-time operational script/command, not
+    part of the app
+
+### SS6 — Sanity-check import
+
+- [ ] **SS6: Re-run `import_all.py` against the self-hosted instance**
+  - Acceptance: `python backend/scripts/import_all.py` (pointed at the
+    self-hosted `DATABASE_URL`) completes with `inserted: 0` for every
+    city if SS5's dump was complete — any non-zero `inserted` count means
+    the dump missed rows, and that's the signal to investigate before
+    proceeding, not paper over
+  - Verify: script output logged and diffed against expectation (all
+    zeros)
+  - Files: none — reuses `backend/scripts/import_all.py` unchanged
+
+### SS7 — Email and phone OTP configuration
+
+- [ ] **SS7: Configure `GOTRUE_SMTP_*` (Brevo) and `GOTRUE_SMS_TWILIO_*` env vars**
+  - Acceptance: every relevant setting from the managed project's Auth
+    dashboard (SMTP host/port/user, sender address, Twilio Account
+    SID/Auth Token/from-number, OTP expiry, redirect URLs) has a
+    corresponding `GOTRUE_*` env var set, diffed field-by-field against
+    the dashboard — not reconstructed from memory
+  - Verify: trigger a real sign-up email and a real phone OTP send against
+    the self-hosted `auth` service in a throwaway test, confirm both
+    arrive
+  - Files: `docker-compose.yml` (`auth` service `environment:` block),
+    `.env` (secrets)
+
+### SS8 — Staging cutover and manual verification
+
+- [ ] **SS8: Point a non-production config at the self-hosted stack and verify end-to-end**
+  - Acceptance: a separate env config (not the live `frontend/.env` /
+    `backend/.env`) points `SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_URL` at
+    `supabase.freipark.com`; manual verification covers sign-up, sign-in,
+    sign-out, phone OTP, and spot loading (`useSpots` RPC) — all the
+    behaviors `SPEC-auth.md` and `SPEC-map.md` already define success
+    criteria for, now re-verified against the new backend
+  - Verify: manual simulator/device pass through each flow above, no
+    unexpected errors; `curl` the self-hosted `spots_in_bbox` RPC directly
+    and confirm it returns rows
+  - Files: a staging-only env file (naming TBD — not `.env`, to avoid any
+    risk of it being picked up by a production build)
+
+### SS9 — Backups
+
+- [ ] **SS9: Set up a `pg_dump` cron job writing to Cloudflare R2; prove it with a real restore**
+  - Acceptance: a scheduled job dumps the self-hosted `db` and uploads to
+    the `freipark-tiles` R2 bucket (or a dedicated backups bucket) on a
+    regular cadence (daily, to start); at least one dump has been
+    downloaded and restored into a scratch Postgres instance to confirm
+    it's actually usable — an untested backup doesn't count as done
+  - Verify: cron job's log shows successful runs; the test-restore step
+    produces a working database with expected row counts
+  - Files: a new script (e.g. `backend/scripts/backup_db.sh` or similar —
+    exact location TBD when this task starts)
+
+### SS10 — Production cutover
+
+- [ ] **SS10: Update `backend/.env` and `frontend/.env`; redeploy**
+  - Acceptance: `SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_URL`, and
+    `DATABASE_URL` all point at the self-hosted stack; app rebuilt/redeployed;
+    every SS8 verification repeated once more against production config
+    before declaring this done
+  - Verify: same checklist as SS8, run again against the real `.env`
+    values this time
+  - Files: `backend/.env`, `frontend/.env` (both local-only, never
+    committed)
+  - **Gate:** do not start this task until SS8 and SS9 are both checked
+    off above.
+
+### SS11 — Rollback window
+
+- [ ] **SS11: Keep the managed Supabase project paused (not deleted) for a defined window post-cutover**
+  - Acceptance: managed project left paused; monitoring in place on the
+    self-hosted stack for the duration (container health, disk usage,
+    error rates) to catch anything SS8's manual pass missed
+  - Verify: window elapses (see `SPEC-infra.md` § Open Questions —
+    proposed 2 weeks) with no rollback needed
+  - Files: none
+
+### SS12 — Documentation and managed-project decision
+
+- [ ] **SS12: Update `SPEC-infra.md` and this file to reflect the completed cutover; decide on deleting the managed project**
+  - Acceptance: `SPEC-infra.md`'s Tech Stack table, Environment Variables
+    section, and this plan's checkboxes all reflect self-hosted Supabase
+    as the live setup, not a proposal; managed project either deleted (if
+    SS11's window passed cleanly) or kept with an explicit documented
+    reason
+  - Verify: a fresh reader of `SPEC-infra.md` alone (no tribal knowledge)
+    can tell the self-hosted stack is live, not proposed
+  - Files: `SPEC-infra.md`, `tasks/plan.md`
+
+---
+
+## Completion Checklist
+
+Mirrors `SPEC-infra.md` § Self-Hosted Supabase Migration (Proposed) →
+Success Criteria exactly — see that section for the authoritative list.
+All boxes there are currently unchecked; this plan is how they get
+checked, task by task, in the order above.
