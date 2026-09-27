@@ -92,7 +92,7 @@ describe('useSpots', () => {
         result.current.onRegionDidChange({
           nativeEvent: { bounds: [10.0, 48.0, 11.0, 49.0] },
         } as any);
-        await jest.advanceTimersByTimeAsync(400); // past the 300 ms debounce, flushing fetchBbox too
+        await jest.advanceTimersByTimeAsync(600); // past the 500 ms debounce, flushing fetchBbox too
       });
 
       expect(mockRpc).toHaveBeenCalledWith('spots_in_bbox', {
@@ -109,7 +109,7 @@ describe('useSpots', () => {
 
       await act(async () => {
         result.current.onRegionDidChange({ nativeEvent: { bounds: undefined } } as any);
-        await jest.advanceTimersByTimeAsync(400);
+        await jest.advanceTimersByTimeAsync(600);
       });
 
       expect(mockRpc).not.toHaveBeenCalled();
@@ -122,7 +122,7 @@ describe('useSpots', () => {
         result.current.onRegionDidChange({ nativeEvent: { bounds: [10, 48, 11, 49] } } as any);
         result.current.onRegionDidChange({ nativeEvent: { bounds: [11, 48, 12, 49] } } as any);
         result.current.onRegionDidChange({ nativeEvent: { bounds: [12, 48, 13, 49] } } as any);
-        await jest.advanceTimersByTimeAsync(400);
+        await jest.advanceTimersByTimeAsync(600);
       });
 
       expect(mockRpc).toHaveBeenCalledTimes(1);
@@ -133,6 +133,46 @@ describe('useSpots', () => {
         max_lat: 49,
         lim: 2000,
       });
+    });
+
+    it('discards a stale response that resolves after a newer request', async () => {
+      const { result } = await mountAndFlush();
+
+      // Two overlapping fetches, resolved out of order: the OLDER request
+      // (fired first, for a huge zoomed-out bbox) resolves AFTER the NEWER
+      // one (fired second, for a small zoomed-in bbox) — exactly what can
+      // happen on a real network during a fast pinch-zoom. The final state
+      // must reflect the newer request, not whichever happened to resolve
+      // last on the wire.
+      let resolveOld: (value: { data: SpotRow[]; error: null }) => void = () => {};
+      let resolveNew: (value: { data: SpotRow[]; error: null }) => void = () => {};
+      mockRpc
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveOld = resolve)))
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveNew = resolve)));
+
+      const OLD_SPOT: SpotRow = { ...SPOT, id: 'old' };
+      const NEW_SPOT: SpotRow = { ...SPOT, id: 'new' };
+
+      await act(async () => {
+        result.current.onRegionDidChange({ nativeEvent: { bounds: [0, 0, 40, 40] } } as any);
+        await jest.advanceTimersByTimeAsync(600);
+      });
+      await act(async () => {
+        result.current.onRegionDidChange({ nativeEvent: { bounds: [13, 52, 14, 53] } } as any);
+        await jest.advanceTimersByTimeAsync(600);
+      });
+
+      // Resolve out of order: newer request's response arrives first,
+      // older request's response arrives second (i.e., late).
+      await act(async () => {
+        resolveNew({ data: [NEW_SPOT], error: null });
+      });
+      await act(async () => {
+        resolveOld({ data: [OLD_SPOT], error: null });
+      });
+
+      expect(result.current.geojson.features).toHaveLength(1);
+      expect(result.current.geojson.features[0].properties).toMatchObject({ id: 'new' });
     });
   });
 });
