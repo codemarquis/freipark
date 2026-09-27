@@ -25,7 +25,10 @@ const mockSignOut = supabase.auth.signOut as jest.Mock;
 const mockSignInWithOtp = supabase.auth.signInWithOtp as jest.Mock;
 const mockVerifyOtp = supabase.auth.verifyOtp as jest.Mock;
 
-const SESSION = { user: { id: '1', email: 'a@b.com' } } as unknown as Session;
+const SESSION = {
+  user: { id: '1', email: 'a@b.com' },
+  access_token: 'test-access-token',
+} as unknown as Session;
 const unsubscribe = jest.fn();
 
 beforeEach(() => {
@@ -205,5 +208,70 @@ describe('useAuth', () => {
     const outcome = await result.current.verifyOtp('+491701234567', '000000');
 
     expect(outcome).toEqual({ error: 'Token has expired or is invalid', code: 'otp_expired' });
+  });
+
+  describe('deleteAccount', () => {
+    const originalFetch = globalThis.fetch;
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('returns an error without calling fetch when not signed in', async () => {
+      globalThis.fetch = jest.fn();
+      const { result } = await renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      const outcome = await result.current.deleteAccount();
+
+      expect(outcome).toEqual({ error: 'Not signed in', code: null });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('calls DELETE /account with the access token and signs out locally on success', async () => {
+      mockGetSession.mockResolvedValue({ data: { session: SESSION } });
+      globalThis.fetch = jest.fn().mockResolvedValue({ ok: true }) as unknown as typeof fetch;
+      mockSignOut.mockResolvedValue({ error: null });
+
+      const { result } = await renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      const outcome = await result.current.deleteAccount();
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/account'),
+        expect.objectContaining({
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer test-access-token' },
+        }),
+      );
+      expect(mockSignOut).toHaveBeenCalledTimes(1);
+      expect(outcome).toEqual({ error: null, code: null });
+    });
+
+    it('surfaces an error and does not sign out locally when the backend request fails', async () => {
+      mockGetSession.mockResolvedValue({ data: { session: SESSION } });
+      globalThis.fetch = jest.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
+
+      const { result } = await renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      const outcome = await result.current.deleteAccount();
+
+      expect(outcome).toEqual({ error: 'Failed to delete account', code: null });
+      expect(mockSignOut).not.toHaveBeenCalled();
+    });
+
+    it('surfaces an error when the network request itself throws', async () => {
+      mockGetSession.mockResolvedValue({ data: { session: SESSION } });
+      globalThis.fetch = jest.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
+
+      const { result } = await renderHook(() => useAuth());
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      const outcome = await result.current.deleteAccount();
+
+      expect(outcome).toEqual({ error: 'Failed to delete account', code: null });
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -25,7 +26,8 @@ interface AuthSheetProps {
 
 export function AuthSheet({ visible, onClose }: AuthSheetProps) {
   const sheetRef = useRef<BottomSheetMethods>(null);
-  const { session, user, signUp, signIn, signOut, signInWithOtp, verifyOtp } = useAuth();
+  const { session, user, signUp, signIn, signOut, signInWithOtp, verifyOtp, deleteAccount } =
+    useAuth();
   const [method, setMethod] = useState<Method>('email');
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -122,6 +124,32 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
     onClose();
   }
 
+  async function handleDeleteAccount() {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setError(null);
+            setSubmitting(true);
+            const result = await deleteAccount();
+            setSubmitting(false);
+            if (result.error) {
+              setError(result.error);
+              return;
+            }
+            resetForm();
+            onClose();
+          },
+        },
+      ],
+    );
+  }
+
   async function handleSendCode() {
     setError(null);
     setInfo(null);
@@ -197,6 +225,9 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
               ) : (
                 <Text style={styles.buttonText}>Sign Out</Text>
               )}
+            </Pressable>
+            <Pressable onPress={handleDeleteAccount} disabled={submitting}>
+              <Text style={styles.dangerLink}>Delete Account</Text>
             </Pressable>
           </>
         ) : (
@@ -416,6 +447,12 @@ const styles = StyleSheet.create({
     color: '#6366f1',
     textAlign: 'center',
     marginTop: 10,
+  },
+  dangerLink: {
+    fontSize: 13,
+    color: '#dc2626',
+    textAlign: 'center',
+    marginTop: 14,
   },
   button: {
     height: 46,

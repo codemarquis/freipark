@@ -24,7 +24,8 @@ app = FastAPI(title="FreiPark API", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-from routers import health, route
+from routers import account, health, route
 
 app.include_router(health.router)
 app.include_router(route.router)
+app.include_router(account.router)

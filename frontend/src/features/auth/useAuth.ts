@@ -61,5 +61,30 @@ export function useAuth() {
     return { error: error?.message ?? null, code: error?.code ?? null };
   }
 
-  return { ...state, signUp, signIn, signOut, signInWithOtp, verifyOtp };
+  async function deleteAccount(): Promise<AuthResult> {
+    const accessToken = state.session?.access_token;
+    if (!accessToken) {
+      return { error: 'Not signed in', code: null };
+    }
+
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? '';
+    try {
+      const response = await fetch(`${apiUrl}/account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) {
+        return { error: 'Failed to delete account', code: null };
+      }
+    } catch {
+      return { error: 'Failed to delete account', code: null };
+    }
+
+    // The backend deleted the account server-side; clear the local session
+    // too so the app doesn't keep treating this device as signed in.
+    await supabase.auth.signOut();
+    return { error: null, code: null };
+  }
+
+  return { ...state, signUp, signIn, signOut, signInWithOtp, verifyOtp, deleteAccount };
 }
