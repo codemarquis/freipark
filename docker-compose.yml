@@ -150,8 +150,14 @@ services:
       GOTRUE_SMTP_ADMIN_EMAIL: ${BREVO_SENDER_EMAIL}
       GOTRUE_SMTP_SENDER_NAME: FreiPark
       GOTRUE_EXTERNAL_PHONE_ENABLED: "true"
-      # Temporary until SS7 wires real Twilio credentials — same reasoning.
-      GOTRUE_SMS_AUTOCONFIRM: "true"
+      # SS7: Vonage — Twilio needs a paid Messaging Service SID, MessageBird/
+      # Bird's current API is incompatible with GoTrue's built-in provider
+      # (both confirmed via direct testing, see tasks/plan.md § SS7).
+      GOTRUE_SMS_PROVIDER: vonage
+      GOTRUE_SMS_VONAGE_API_KEY: ${VONAGE_API_KEY}
+      GOTRUE_SMS_VONAGE_API_SECRET: ${VONAGE_API_SECRET}
+      GOTRUE_SMS_VONAGE_FROM: ${VONAGE_FROM}
+      GOTRUE_SMS_AUTOCONFIRM: "false"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 10s
