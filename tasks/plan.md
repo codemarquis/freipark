@@ -1016,6 +1016,26 @@ implementation-time concerns.)*
   provider — broke the entire self-hosted API's public URL until an A
   record (DNS-only, not proxied — Caddy needs to terminate its own TLS)
   was re-added in Cloudflare.
+
+  **Follow-up, same day:** the confirmation email's link 404'd
+  ("No Route matched") even after the above. Root cause:
+  `SUPABASE_SELFHOSTED_EXTERNAL_URL`/`API_EXTERNAL_URL` doesn't work the
+  way its name implies — GoTrue's mailer link-builder only ever uses
+  that URL's *scheme+host*, never its path, then appends its own bare
+  internal route (`/verify`, `/callback`). So no `API_EXTERNAL_URL`
+  value can produce a `/auth/v1/verify`-shaped link; Kong needs a route
+  for the *bare* path too. Fixed in `kong.yml.template` (added `/verify`
+  and `/callback` alongside the existing `/auth/v1/verify` and
+  `/auth/v1/callback` routes). Also added
+  `GOTRUE_SITE_URL=https://freipark.com/confirmed.html` (a real success
+  page on the landing site, `freipark-landing`'s `public/confirmed.html`)
+  instead of a raw `freipark://` deep link — most people click email
+  links from whatever device they're on, not necessarily one with the
+  app installed, and the app doesn't have `freipark://` registered in
+  any shipped build yet anyway (added `"scheme": "freipark"` to
+  `frontend/app.json` for when it does). Verified for real: the exact
+  previously-failing link now returns `303` to the confirmation page
+  with a valid session token, decoded JWT shows `email_verified: true`.
   **Phone (Twilio/MessageBird/Bird) still unresolved** — see above;
   `GOTRUE_SMS_AUTOCONFIRM` still `"true"`, no real OTP delivery.
 
