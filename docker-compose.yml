@@ -140,11 +140,9 @@ services:
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
-      # SS7: Brevo blocked on their end for new accounts (~48h hold) as of
-      # 2026-09-26 — back to autoconfirm until a real SMTP key is issued.
-      # GOTRUE_SMTP_* below stay defined so re-enabling is just this flag
-      # plus swapping BREVO_SMTP_KEY's placeholder for the real key.
-      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      # SS7: real Brevo SMTP key issued 2026-09-28 — autoconfirm off,
+      # signups/recovery now go through real email delivery.
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
       GOTRUE_SMTP_HOST: ${BREVO_SMTP_HOST}
       GOTRUE_SMTP_PORT: ${BREVO_SMTP_PORT}
       GOTRUE_SMTP_USER: ${BREVO_SMTP_LOGIN}
