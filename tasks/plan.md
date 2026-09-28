@@ -997,6 +997,28 @@ implementation-time concerns.)*
     GoTrue/Bird compatibility, or evaluate a different GoTrue-supported
     provider (Vonage) not yet tried.
 
+- [x] **SS7 email half: real Brevo delivery working — done 2026-09-28.**
+  48h hold lifted; real `BREVO_SMTP_KEY` swapped into `backend/.env` and
+  root `.env` (both local and the OVH box — the box's copies were missing
+  all five `BREVO_*` vars entirely, not just a stale key, discovered via
+  `docker compose`'s "variable not set" warnings after a first deploy
+  attempt). `GOTRUE_MAILER_AUTOCONFIRM` flipped back to `"false"`.
+  First real test (`POST /auth/v1/signup`) failed with a concrete new
+  error — `525 "5.7.1 Unauthorized IP address"` — Brevo's separate
+  sending-IP allowlist rejecting the OVH box's IP; not the same as the
+  48h account hold. Fixed by authorizing `57.131.143.208` in Brevo's
+  dashboard (Settings → Security → Authorised IPs). Re-tested signup:
+  `confirmation_sent_at` populated, no error, and the email was actually
+  received (confirmed by the user, not just inferred from a 200).
+  Unrelated but discovered mid-fix: changing `freipark.com`'s nameservers
+  to Cloudflare (for the new landing page's custom domain) orphaned the
+  `supabase.freipark.com` DNS record, which only existed at the old DNS
+  provider — broke the entire self-hosted API's public URL until an A
+  record (DNS-only, not proxied — Caddy needs to terminate its own TLS)
+  was re-added in Cloudflare.
+  **Phone (Twilio/MessageBird/Bird) still unresolved** — see above;
+  `GOTRUE_SMS_AUTOCONFIRM` still `"true"`, no real OTP delivery.
+
 ### SS8 — Staging cutover and manual verification
 
 - [x] **SS8: Point a non-production config at the self-hosted stack and verify end-to-end — done 2026-09-27.**
