@@ -36,6 +36,12 @@ services:
         strip_path: true
         paths:
           - /auth/v1/verify
+          # GoTrue's own mailer link-builder ignores any path component in
+          # API_EXTERNAL_URL — it only uses the scheme+host, then appends
+          # its own bare internal route (e.g. /verify), never /auth/v1/verify.
+          # So confirmation/recovery emails always link to the bare path;
+          # route it directly too, not just the Kong-prefixed form.
+          - /verify
     plugins:
       - name: cors
 
@@ -46,6 +52,7 @@ services:
         strip_path: true
         paths:
           - /auth/v1/callback
+          - /callback
     plugins:
       - name: cors
 
