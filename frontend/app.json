@@ -2,6 +2,7 @@
   "expo": {
     "name": "FreiPark",
     "slug": "freipark",
+    "scheme": "freipark",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
