@@ -1,5 +1,7 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { PostHogProvider } from 'posthog-react-native';
 import { MapScreen } from './src/features/map/MapScreen';
+import { posthog } from './src/lib/posthog';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
@@ -22,9 +24,15 @@ Sentry.init({
 });
 
 export default Sentry.wrap(function App() {
-  return (
+  const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <MapScreen />
     </GestureHandlerRootView>
+  );
+
+  return posthog ? (
+    <PostHogProvider client={posthog}>{content}</PostHogProvider>
+  ) : (
+    content
   );
 });

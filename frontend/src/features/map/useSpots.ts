@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { boundsToParams, spotsToGeoJSON } from '../../lib/geo';
 import type { Bbox, SpotsGeoJSON } from '../../lib/geo';
 import type { SpotRow } from '../../lib/types';
+import { posthogLogger } from '../../lib/posthogLogger';
 
 const EMPTY: SpotsGeoJSON = { type: 'FeatureCollection', features: [] };
 
@@ -29,6 +30,7 @@ export function useSpots() {
 
   const fetchBbox = useCallback(async (bbox: Bbox) => {
     const id = ++requestId.current;
+    posthogLogger.info('parking_spots_fetch_started');
     console.log('[useSpots] fetching bbox', bbox);
     const { data, error } = await supabase.rpc('spots_in_bbox', {
       ...bbox,
@@ -40,10 +42,17 @@ export function useSpots() {
       return;
     }
     if (error) {
+      posthogLogger.error('parking_spots_fetch_failed', {
+        operation: 'spots_in_bbox',
+      });
       console.error('[useSpots] RPC error', error);
       return;
     }
-    console.log('[useSpots] got', (data as SpotRow[])?.length ?? 0, 'spots');
+    const spotCount = (data as SpotRow[])?.length ?? 0;
+    posthogLogger.info('parking_spots_fetch_completed', {
+      parking_spot_count: spotCount,
+    });
+    console.log('[useSpots] got', spotCount, 'spots');
     setGeojson(spotsToGeoJSON(data as SpotRow[]));
   }, []);
 

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { posthog } from '../../lib/posthog';
 import { useAuth } from './useAuth';
 
 const SNAP_POINTS = ['45%'];
@@ -108,6 +109,10 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
       return;
     }
 
+    posthog?.capture('authentication_completed', {
+      authentication_method: 'email',
+      authentication_mode: mode,
+    });
     resetForm();
     onClose();
   }
@@ -172,6 +177,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
       return;
     }
 
+    posthog?.capture('phone_otp_requested');
     setOtpSent(true);
     setInfo(`Enter the code sent to ${phone.trim()}.`);
   }
@@ -193,6 +199,9 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
       return;
     }
 
+    posthog?.capture('authentication_completed', {
+      authentication_method: 'phone_otp',
+    });
     resetForm();
     onClose();
   }

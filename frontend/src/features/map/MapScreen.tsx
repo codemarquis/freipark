@@ -5,6 +5,7 @@ import type { CameraRef, StyleSpecification } from '@maplibre/maplibre-react-nat
 import * as Location from 'expo-location';
 import protomapsLayers from 'protomaps-themes-base';
 import { withNoSpaceFontStacks } from '../../lib/fonts';
+import { posthog } from '../../lib/posthog';
 import { useSpots } from './useSpots';
 import { useRoute } from './useRoute';
 import { SpotLayer } from './SpotLayer';
@@ -111,6 +112,11 @@ export function MapScreen() {
   }, []);
 
   const handleSpotPress = useCallback((spot: SpotRow) => {
+    posthog?.capture('parking_spot_selected', {
+      parking_access: spot.access ?? 'unknown',
+      parking_spot_type: spot.spot_type,
+      has_capacity: spot.capacity != null,
+    });
     setSelectedSpot(spot);
   }, []);
 

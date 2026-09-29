@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
+import { posthog } from '../../lib/posthog';
 import { PaymentLinks } from './PaymentLinks';
 import type { RouteState } from './useRoute';
 import type { SpotRow } from '../../lib/types';
@@ -68,6 +69,11 @@ export function SpotDetailSheet({ spot, onClose, route, locationDenied }: SpotDe
 
   function openInAppleMaps() {
     if (!spot) return;
+    posthog?.capture('navigation_opened', {
+      map_provider: Platform.OS === 'ios' ? 'apple_maps' : 'system_maps',
+      parking_access: spot.access ?? 'unknown',
+      parking_spot_type: spot.spot_type,
+    });
     const url =
       Platform.OS === 'ios'
         ? `maps://?daddr=${spot.lat},${spot.lon}`
@@ -77,6 +83,11 @@ export function SpotDetailSheet({ spot, onClose, route, locationDenied }: SpotDe
 
   function openInGoogleMaps() {
     if (!spot) return;
+    posthog?.capture('navigation_opened', {
+      map_provider: 'google_maps',
+      parking_access: spot.access ?? 'unknown',
+      parking_spot_type: spot.spot_type,
+    });
     Linking.openURL(
       `comgooglemaps://?daddr=${spot.lat},${spot.lon}&directionsmode=driving`
     ).catch(() => {});

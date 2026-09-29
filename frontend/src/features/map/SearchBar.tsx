@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { posthog } from '../../lib/posthog';
 import { useGeocoder, type GeoResult } from './useGeocoder';
 
 type Props = {
@@ -23,6 +24,7 @@ export function SearchBar({ onSelect }: Props) {
   const showDropdown = focused && query.trim().length >= 2;
 
   function handleSelect(result: GeoResult) {
+    posthog?.capture('place_search_selected');
     setQuery('');
     setFocused(false);
     inputRef.current?.blur();

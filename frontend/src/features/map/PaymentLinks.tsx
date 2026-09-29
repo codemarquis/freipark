@@ -1,10 +1,15 @@
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { posthog } from '../../lib/posthog';
 
 const EASYPARK_IOS_NATIVE = 'itms-apps://apps.apple.com/app/id449594317';
 const EASYPARK_IOS_WEB = 'https://apps.apple.com/us/app/easypark-parking-made-easy/id449594317';
 const EASYPARK_ANDROID = 'https://play.google.com/store/apps/details?id=net.easypark.android';
 
 function openEasyPark() {
+  posthog?.capture('payment_provider_opened', {
+    payment_provider: 'easypark',
+    platform: Platform.OS,
+  });
   if (Platform.OS === 'ios') {
     Linking.openURL(EASYPARK_IOS_NATIVE).catch(() =>
       Linking.openURL(EASYPARK_IOS_WEB).catch(() => {})

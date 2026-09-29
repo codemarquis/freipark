@@ -1,6 +1,40 @@
 import { useEffect, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
+import { posthog } from '../../lib/posthog';
 import { supabase } from '../../lib/supabase';
+
+// useAuth is used by more than one component, so authentication observers can
+// receive the same transition more than once. Keep identity transitions global
+// to ensure one identify/reset per actual authentication change.
+let identifiedUserId: string | null = null;
+let signedOut = false;
+
+function identifyUser(user: User) {
+  if (identifiedUserId === user.id) {
+    return;
+  }
+
+  posthog?.identify(
+    user.id,
+    user.email
+      ? {
+          $set: { email: user.email },
+        }
+      : undefined,
+  );
+  identifiedUserId = user.id;
+  signedOut = false;
+}
+
+function resetIdentity() {
+  if (signedOut) {
+    return;
+  }
+
+  posthog?.reset();
+  identifiedUserId = null;
+  signedOut = true;
+}
 
 interface AuthState {
   session: Session | null;
@@ -27,7 +61,13 @@ export function useAuth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        identifyUser(session.user);
+      } else if (event === 'SIGNED_OUT') {
+        resetIdentity();
+      }
+
       setState({ session, user: session?.user ?? null, loading: false });
     });
 
@@ -47,6 +87,7 @@ export function useAuth() {
   }
 
   async function signOut(): Promise<AuthResult> {
+    posthog?.capture('account_sign_out_requested');
     const { error } = await supabase.auth.signOut();
     return { error: error?.message ?? null, code: error?.code ?? null };
   }
@@ -79,6 +120,8 @@ export function useAuth() {
     } catch {
       return { error: 'Failed to delete account', code: null };
     }
+
+    posthog?.capture('account_deleted');
 
     // The backend deleted the account server-side; clear the local session
     // too so the app doesn't keep treating this device as signed in.
