@@ -1036,8 +1036,26 @@ implementation-time concerns.)*
   `frontend/app.json` for when it does). Verified for real: the exact
   previously-failing link now returns `303` to the confirmation page
   with a valid session token, decoded JWT shows `email_verified: true`.
-  **Phone (Twilio/MessageBird/Bird) still unresolved** — see above;
-  `GOTRUE_SMS_AUTOCONFIRM` still `"true"`, no real OTP delivery.
+  **Phone (Twilio/MessageBird/Bird) still unresolved via those two** — see
+  above.
+
+- [x] **SS7 phone half: Vonage SMS OTP working — done 2026-09-29.**
+  Twilio blocked (needs paid Messaging Service SID) and MessageBird/Bird
+  confirmed incompatible (see above) — tried Vonage next, GoTrue's third
+  built-in SMS provider, not previously attempted. Wired
+  `GOTRUE_SMS_PROVIDER=vonage` + `GOTRUE_SMS_VONAGE_API_KEY/API_SECRET/FROM`
+  into `docker-compose.yml`'s `auth` service (env vars: `VONAGE_API_KEY`,
+  `VONAGE_API_SECRET`, `VONAGE_FROM` in root `.env`), flipped
+  `GOTRUE_SMS_AUTOCONFIRM` to `"false"`. Real test: `POST /auth/v1/otp`
+  → real SMS arrived with a real OTP code — confirmed by the user, not
+  just inferred from the `200` response (learned that lesson from the
+  email side of SS7 earlier the same day).
+  **Known cosmetic gap:** SMS sender shows as "Vonage," not "FreiPark" —
+  Germany requires alphanumeric Sender IDs to be pre-registered per
+  Vonage's Global Sender ID Portal (dashboard → Phone Numbers tab)
+  before carriers will display them; falls back silently until then.
+  Non-blocking — OTP delivery itself works — parked as a later polish
+  item, not attempted yet.
 
 ### SS8 — Staging cutover and manual verification
 
