@@ -42,3 +42,5 @@ yarn-error.*
 
 # Claude Code internal
 .claude/
+
+.env.local

@@ -11,7 +11,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.freipark.app",
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["maps", "comgooglemaps"],
+        "LSApplicationQueriesSchemes": [
+          "maps",
+          "comgooglemaps"
+        ],
         "NSLocationWhenInUseUsageDescription": "FreiPark uses your location to show nearby parking spots and directions to the one you select."
       }
     },
@@ -34,6 +37,14 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "FreiPark uses your location to show nearby parking spots and directions to the one you select."
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "invest-hub"
         }
       ]
     ]

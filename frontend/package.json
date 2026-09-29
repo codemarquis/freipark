@@ -4,7 +4,9 @@
   "main": "index.ts",
   "jest": {
     "preset": "jest-expo",
-    "testMatch": ["**/__tests__/**/*.(ts|tsx)"],
+    "testMatch": [
+      "**/__tests__/**/*.(ts|tsx)"
+    ],
     "transformIgnorePatterns": [
       "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@gorhom|@maplibre|protomaps-themes-base|pmtiles)"
     ]
@@ -13,6 +15,7 @@
     "@gorhom/bottom-sheet": "^5.2.14",
     "@maplibre/maplibre-react-native": "^11.3.6",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@sentry/react-native": "^8.28.0",
     "@supabase/supabase-js": "^2.112.3",
     "expo": "~57.0.15",
     "expo-dev-client": "~57.0.14",
