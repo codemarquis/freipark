@@ -17,7 +17,7 @@ class HealthResponse(BaseModel):
     cities: list[CityHealth]
 
 
-@router.get("/health/db", response_model=HealthResponse)
+@router.api_route("/health/db", methods=["GET", "HEAD"], response_model=HealthResponse)
 async def health_db() -> HealthResponse:
     try:
         pool = await get_pool()
