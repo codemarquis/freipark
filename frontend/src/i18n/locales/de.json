@@ -1,0 +1,71 @@
+{
+  "common": {
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "settings": "Einstellungen"
+  },
+  "account": {
+    "signIn": "Anmelden",
+    "account": "Konto",
+    "signedIn": "Angemeldet",
+    "signOut": "Abmelden",
+    "deleteAccount": "Konto löschen",
+    "deleteAccountConfirmTitle": "Konto löschen?",
+    "deleteAccountConfirmMessage": "Dies löscht Ihr Konto dauerhaft und kann nicht rückgängig gemacht werden."
+  },
+  "auth": {
+    "tabEmail": "E-Mail",
+    "tabPhone": "Telefon",
+    "tabSignIn": "Anmelden",
+    "tabSignUp": "Registrieren",
+    "emailPlaceholder": "E-Mail",
+    "passwordPlaceholder": "Passwort",
+    "continue": "Weiter",
+    "phonePlaceholder": "Telefonnummer, z. B. +491701234567",
+    "sendCode": "Code senden",
+    "verificationCodePlaceholder": "Bestätigungscode",
+    "verify": "Bestätigen",
+    "useDifferentNumber": "Andere Nummer verwenden",
+    "resendCode": "Code erneut senden",
+    "errorInvalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein.",
+    "errorPasswordTooShort": "Das Passwort muss mindestens 6 Zeichen lang sein.",
+    "infoCheckEmail": "Bestätigen Sie Ihr Konto über die E-Mail, die wir Ihnen gesendet haben.",
+    "errorInvalidPhone": "Geben Sie eine Telefonnummer im internationalen Format ein, z. B. +491701234567.",
+    "infoCodeSent": "Geben Sie den Code ein, der an {{phone}} gesendet wurde.",
+    "errorInvalidCode": "Geben Sie den Code aus Ihrer SMS ein."
+  },
+  "map": {
+    "locating": "Standort wird ermittelt…",
+    "enableLocationBanner": "Aktivieren Sie den Standort, um Parkplätze in Ihrer Nähe zu finden",
+    "attribution": "© OpenStreetMap-Mitwirkende"
+  },
+  "spot": {
+    "accessFree": "Kostenlos parken",
+    "accessPaid": "Kostenpflichtiges Parken",
+    "accessPermit": "Parkausweis erforderlich",
+    "accessPrivate": "Privat",
+    "accessUnknown": "Zugang unbekannt",
+    "typeStreet": "Straßenparkplatz",
+    "typeGarage": "Parkhaus",
+    "typeLot": "Parkplatz",
+    "typeZone": "Parkzone",
+    "enableLocationForDirections": "Aktivieren Sie den Standort, um die Wegbeschreibung zu sehen.",
+    "gettingDirections": "Route wird berechnet…",
+    "directionsUnavailable": "Route nicht verfügbar.",
+    "operator": "Betreiber: {{name}}",
+    "capacity": "Kapazität: {{count}}",
+    "permitRequired": "Für diesen Parkplatz ist ein gültiger Parkausweis erforderlich.",
+    "openInAppleMaps": "In Apple Maps öffnen",
+    "openInMaps": "In Karten öffnen",
+    "openInGoogleMaps": "In Google Maps öffnen",
+    "minutesShort": "Min",
+    "lessThanOneMin": "<1 Min",
+    "hoursMinutes": "{{h}} Std {{m}} Min"
+  },
+  "payment": {
+    "openEasyPark": "EasyPark öffnen"
+  },
+  "search": {
+    "placeholder": "In Deutschland suchen…"
+  }
+}

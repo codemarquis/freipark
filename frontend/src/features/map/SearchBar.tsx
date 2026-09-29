@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { posthog } from '../../lib/posthog';
 import { useGeocoder, type GeoResult } from './useGeocoder';
 
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function SearchBar({ onSelect }: Props) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -37,7 +39,7 @@ export function SearchBar({ onSelect }: Props) {
         <TextInput
           ref={inputRef}
           style={styles.input}
-          placeholder="Search in Germany…"
+          placeholder={t('search.placeholder')}
           placeholderTextColor="#94a3b8"
           value={query}
           onChangeText={setQuery}

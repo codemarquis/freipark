@@ -1,5 +1,6 @@
 import { Linking } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
+import '../src/i18n';
 import { SpotDetailSheet } from '../src/features/map/SpotDetailSheet';
 import type { SpotRow } from '../src/lib/types';
 import type { RouteState } from '../src/features/map/useRoute';

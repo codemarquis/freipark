@@ -1,0 +1,71 @@
+{
+  "common": {
+    "cancel": "İptal",
+    "delete": "Sil",
+    "settings": "Ayarlar"
+  },
+  "account": {
+    "signIn": "Giriş yap",
+    "account": "Hesap",
+    "signedIn": "Giriş yapıldı",
+    "signOut": "Çıkış Yap",
+    "deleteAccount": "Hesabı Sil",
+    "deleteAccountConfirmTitle": "Hesap silinsin mi?",
+    "deleteAccountConfirmMessage": "Bu, hesabınızı kalıcı olarak siler ve geri alınamaz."
+  },
+  "auth": {
+    "tabEmail": "E-posta",
+    "tabPhone": "Telefon",
+    "tabSignIn": "Giriş Yap",
+    "tabSignUp": "Kayıt Ol",
+    "emailPlaceholder": "E-posta",
+    "passwordPlaceholder": "Şifre",
+    "continue": "Devam Et",
+    "phonePlaceholder": "Telefon numarası, ör. +491701234567",
+    "sendCode": "Kod Gönder",
+    "verificationCodePlaceholder": "Doğrulama kodu",
+    "verify": "Doğrula",
+    "useDifferentNumber": "Farklı bir numara kullan",
+    "resendCode": "Kodu tekrar gönder",
+    "errorInvalidEmail": "Geçerli bir e-posta adresi girin.",
+    "errorPasswordTooShort": "Şifre en az 6 karakter olmalıdır.",
+    "infoCheckEmail": "Hesabınızı onaylamak için e-postanızı kontrol edin.",
+    "errorInvalidPhone": "Telefon numarasını uluslararası formatta girin, ör. +491701234567.",
+    "infoCodeSent": "{{phone}} adresine gönderilen kodu girin.",
+    "errorInvalidCode": "SMS'inizdeki kodu girin."
+  },
+  "map": {
+    "locating": "Konum belirleniyor…",
+    "enableLocationBanner": "Yakınınızdaki park yerlerini bulmak için konumu etkinleştirin",
+    "attribution": "© OpenStreetMap katkıda bulunanlar"
+  },
+  "spot": {
+    "accessFree": "Ücretsiz park",
+    "accessPaid": "Ücretli park",
+    "accessPermit": "İzin belgesi gerekli",
+    "accessPrivate": "Özel",
+    "accessUnknown": "Erişim bilinmiyor",
+    "typeStreet": "Cadde park yeri",
+    "typeGarage": "Kapalı otopark",
+    "typeLot": "Açık otopark",
+    "typeZone": "Park bölgesi",
+    "enableLocationForDirections": "Yol tarifini görmek için konumu etkinleştirin.",
+    "gettingDirections": "Yol tarifi alınıyor…",
+    "directionsUnavailable": "Yol tarifi kullanılamıyor.",
+    "operator": "İşletmeci: {{name}}",
+    "capacity": "Kapasite: {{count}}",
+    "permitRequired": "Bu park yeri için geçerli bir park izni gereklidir.",
+    "openInAppleMaps": "Apple Haritalar'da Aç",
+    "openInMaps": "Haritalar'da Aç",
+    "openInGoogleMaps": "Google Haritalar'da Aç",
+    "minutesShort": "dk",
+    "lessThanOneMin": "<1 dk",
+    "hoursMinutes": "{{h}} sa {{m}} dk"
+  },
+  "payment": {
+    "openEasyPark": "EasyPark'ı Aç"
+  },
+  "search": {
+    "placeholder": "Almanya'da ara…"
+  }
+}

@@ -3,6 +3,7 @@ import { PostHogProvider } from 'posthog-react-native';
 import { MapScreen } from './src/features/map/MapScreen';
 import { posthog } from './src/lib/posthog';
 import * as Sentry from '@sentry/react-native';
+import './src/i18n';
 
 Sentry.init({
   dsn: 'https://999e2b6768ad5b3be729a761db326b43@o4512169783656448.ingest.de.sentry.io/4512169821732944',

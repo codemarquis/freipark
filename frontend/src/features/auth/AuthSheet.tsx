@@ -8,10 +8,18 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { posthog } from '../../lib/posthog';
+import { SUPPORTED_LANGUAGES, setLanguage, type SupportedLanguage } from '../../i18n';
 import { useAuth } from './useAuth';
+
+const LANGUAGE_LABEL: Record<SupportedLanguage, string> = {
+  de: 'DE',
+  en: 'EN',
+  tr: 'TR',
+};
 
 const SNAP_POINTS = ['45%'];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -26,6 +34,7 @@ interface AuthSheetProps {
 }
 
 export function AuthSheet({ visible, onClose }: AuthSheetProps) {
+  const { t, i18n } = useTranslation();
   const sheetRef = useRef<BottomSheetMethods>(null);
   const { session, user, signUp, signIn, signOut, signInWithOtp, verifyOtp, deleteAccount } =
     useAuth();
@@ -78,11 +87,11 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
     setInfo(null);
 
     if (!EMAIL_RE.test(email.trim())) {
-      setError('Enter a valid email address.');
+      setError(t('auth.errorInvalidEmail'));
       return;
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+      setError(t('auth.errorPasswordTooShort'));
       return;
     }
 
@@ -96,7 +105,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
       // that's a user-enumeration vector. Show the same generic message a
       // genuine new signup gets instead of Supabase's "already registered".
       if (mode === 'signup' && (result.code === 'user_already_exists' || result.code === 'email_exists')) {
-        setInfo('Check your email to confirm your account.');
+        setInfo(t('auth.infoCheckEmail'));
         return;
       }
       setError(result.error);
@@ -105,7 +114,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
 
     if (mode === 'signup' && !session) {
       // Email confirmation required — no session yet.
-      setInfo('Check your email to confirm your account.');
+      setInfo(t('auth.infoCheckEmail'));
       return;
     }
 
@@ -131,12 +140,12 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
 
   async function handleDeleteAccount() {
     Alert.alert(
-      'Delete account?',
-      'This permanently deletes your account and cannot be undone.',
+      t('account.deleteAccountConfirmTitle'),
+      t('account.deleteAccountConfirmMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             setError(null);
@@ -160,7 +169,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
     setInfo(null);
 
     if (!PHONE_RE.test(phone.trim())) {
-      setError('Enter a phone number in international format, e.g. +491701234567.');
+      setError(t('auth.errorInvalidPhone'));
       return;
     }
 
@@ -179,14 +188,14 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
 
     posthog?.capture('phone_otp_requested');
     setOtpSent(true);
-    setInfo(`Enter the code sent to ${phone.trim()}.`);
+    setInfo(t('auth.infoCodeSent', { phone: phone.trim() }));
   }
 
   async function handleVerifyCode() {
     setError(null);
 
     if (otp.trim().length < 4) {
-      setError('Enter the code from your text message.');
+      setError(t('auth.errorInvalidCode'));
       return;
     }
 
@@ -223,20 +232,39 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
       style={styles.sheet}
     >
       <BottomSheetView style={styles.content}>
+        <View style={styles.languageRow}>
+          {SUPPORTED_LANGUAGES.map((lang) => (
+            <Pressable
+              key={lang}
+              onPress={() => setLanguage(lang)}
+              style={[styles.languagePill, i18n.language === lang && styles.languagePillActive]}
+            >
+              <Text
+                style={[
+                  styles.languagePillText,
+                  i18n.language === lang && styles.languagePillTextActive,
+                ]}
+              >
+                {LANGUAGE_LABEL[lang]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
         {user ? (
           <>
-            <Text style={styles.title}>Signed in</Text>
+            <Text style={styles.title}>{t('account.signedIn')}</Text>
             <Text style={styles.email}>{user.email}</Text>
             {error && <Text style={styles.error}>{error}</Text>}
             <Pressable style={styles.button} onPress={handleSignOut} disabled={submitting}>
               {submitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>Sign Out</Text>
+                <Text style={styles.buttonText}>{t('account.signOut')}</Text>
               )}
             </Pressable>
             <Pressable onPress={handleDeleteAccount} disabled={submitting}>
-              <Text style={styles.dangerLink}>Delete Account</Text>
+              <Text style={styles.dangerLink}>{t('account.deleteAccount')}</Text>
             </Pressable>
           </>
         ) : (
@@ -247,7 +275,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                 onPress={() => switchMethod('email')}
               >
                 <Text style={[styles.tabText, method === 'email' && styles.tabTextActive]}>
-                  Email
+                  {t('auth.tabEmail')}
                 </Text>
               </Pressable>
               <Pressable
@@ -255,7 +283,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                 onPress={() => switchMethod('phone')}
               >
                 <Text style={[styles.tabText, method === 'phone' && styles.tabTextActive]}>
-                  Phone
+                  {t('auth.tabPhone')}
                 </Text>
               </Pressable>
             </View>
@@ -268,7 +296,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                     onPress={() => switchMode('signin')}
                   >
                     <Text style={[styles.tabText, mode === 'signin' && styles.tabTextActive]}>
-                      Sign In
+                      {t('auth.tabSignIn')}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -276,14 +304,14 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                     onPress={() => switchMode('signup')}
                   >
                     <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>
-                      Sign Up
+                      {t('auth.tabSignUp')}
                     </Text>
                   </Pressable>
                 </View>
 
                 <TextInput
                   style={styles.input}
-                  placeholder="Email"
+                  placeholder={t('auth.emailPlaceholder')}
                   placeholderTextColor="#94a3b8"
                   value={email}
                   onChangeText={setEmail}
@@ -294,7 +322,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Password"
+                  placeholder={t('auth.passwordPlaceholder')}
                   placeholderTextColor="#94a3b8"
                   value={password}
                   onChangeText={setPassword}
@@ -311,7 +339,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                   {submitting ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Continue</Text>
+                    <Text style={styles.buttonText}>{t('auth.continue')}</Text>
                   )}
                 </Pressable>
               </>
@@ -319,7 +347,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
               <>
                 <TextInput
                   style={styles.input}
-                  placeholder="Phone number, e.g. +491701234567"
+                  placeholder={t('auth.phonePlaceholder')}
                   placeholderTextColor="#94a3b8"
                   value={phone}
                   onChangeText={setPhone}
@@ -335,7 +363,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                   {submitting ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Send Code</Text>
+                    <Text style={styles.buttonText}>{t('auth.sendCode')}</Text>
                   )}
                 </Pressable>
               </>
@@ -345,7 +373,7 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
 
                 <TextInput
                   style={styles.input}
-                  placeholder="Verification code"
+                  placeholder={t('auth.verificationCodePlaceholder')}
                   placeholderTextColor="#94a3b8"
                   value={otp}
                   onChangeText={setOtp}
@@ -359,14 +387,14 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
                   {submitting ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.buttonText}>Verify</Text>
+                    <Text style={styles.buttonText}>{t('auth.verify')}</Text>
                   )}
                 </Pressable>
                 <Pressable onPress={handleChangeNumber} disabled={submitting}>
-                  <Text style={styles.link}>Use a different number</Text>
+                  <Text style={styles.link}>{t('auth.useDifferentNumber')}</Text>
                 </Pressable>
                 <Pressable onPress={handleSendCode} disabled={submitting}>
-                  <Text style={styles.link}>Resend code</Text>
+                  <Text style={styles.link}>{t('auth.resendCode')}</Text>
                 </Pressable>
               </>
             )}
@@ -378,6 +406,29 @@ export function AuthSheet({ visible, onClose }: AuthSheetProps) {
 }
 
 const styles = StyleSheet.create({
+  languageRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 6,
+    marginBottom: 14,
+  },
+  languagePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+  },
+  languagePillActive: {
+    backgroundColor: '#6366f1',
+  },
+  languagePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  languagePillTextActive: {
+    color: '#fff',
+  },
   sheet: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -3 },

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Camera, Map, UserLocation } from '@maplibre/maplibre-react-native';
 import type { CameraRef, StyleSpecification } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
@@ -55,6 +56,7 @@ const MAP_STYLE: StyleSpecification = {
 };
 
 export function MapScreen() {
+  const { t } = useTranslation();
   const cameraRef = useRef<CameraRef>(null);
   const hasCenteredRef = useRef(false);
   const [selectedSpot, setSelectedSpot] = useState<SpotRow | null>(null);
@@ -161,22 +163,22 @@ export function MapScreen() {
 
       {locationLoading && !locationDenied && (
         <View style={styles.locatingChip} pointerEvents="none">
-          <Text style={styles.locatingText}>Locating…</Text>
+          <Text style={styles.locatingText}>{t('map.locating')}</Text>
         </View>
       )}
 
       {showBanner && (
         <View style={styles.locationBanner}>
           <Text style={styles.locationBannerText} numberOfLines={2}>
-            Enable location to find spots near you
+            {t('map.enableLocationBanner')}
           </Text>
           <Pressable
             onPress={openLocationSettings}
             style={styles.settingsButton}
             accessibilityRole="button"
-            accessibilityLabel="Open location settings"
+            accessibilityLabel={t('common.settings')}
           >
-            <Text style={styles.settingsButtonText}>Settings</Text>
+            <Text style={styles.settingsButtonText}>{t('common.settings')}</Text>
           </Pressable>
           <Pressable
             onPress={() => setBannerDismissed(true)}
@@ -191,7 +193,7 @@ export function MapScreen() {
       )}
 
       <View style={styles.attribution} pointerEvents="none">
-        <Text style={styles.attributionText}>© OpenStreetMap contributors</Text>
+        <Text style={styles.attributionText}>{t('map.attribution')}</Text>
       </View>
       <SpotDetailSheet
         spot={selectedSpot}

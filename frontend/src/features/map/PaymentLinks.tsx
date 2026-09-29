@@ -1,4 +1,5 @@
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { posthog } from '../../lib/posthog';
 
 const EASYPARK_IOS_NATIVE = 'itms-apps://apps.apple.com/app/id449594317';
@@ -20,13 +21,14 @@ function openEasyPark() {
 }
 
 export function PaymentLinks() {
+  const { t } = useTranslation();
   return (
     <View style={styles.row}>
       <Pressable
         style={styles.button}
         onPress={openEasyPark}
       >
-        <Text style={styles.buttonText}>Open EasyPark</Text>
+        <Text style={styles.buttonText}>{t('payment.openEasyPark')}</Text>
       </Pressable>
     </View>
   );

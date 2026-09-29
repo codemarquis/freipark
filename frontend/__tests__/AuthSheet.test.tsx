@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import '../src/i18n';
 import { AuthSheet } from '../src/features/auth/AuthSheet';
 import { useAuth } from '../src/features/auth/useAuth';
 
@@ -336,5 +337,31 @@ describe('signed in', () => {
 
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('language switcher', () => {
+  it('shows a pill for each supported language, English active by default', async () => {
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    expect(screen.getByText('DE')).toBeTruthy();
+    expect(screen.getByText('EN')).toBeTruthy();
+    expect(screen.getByText('TR')).toBeTruthy();
+  });
+
+  it('switches every translated string on the screen when a pill is tapped', async () => {
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+
+    expect(screen.getByText('Sign In')).toBeTruthy();
+
+    await fireEvent.press(screen.getByText('DE'));
+
+    await waitFor(() => expect(screen.getByText('Anmelden')).toBeTruthy());
+    expect(screen.queryByText('Sign In')).toBeNull();
+
+    // Switching back to English (i18next is a shared singleton, so later
+    // suites shouldn't inherit German from this one).
+    await fireEvent.press(screen.getByText('EN'));
+    await waitFor(() => expect(screen.getByText('Sign In')).toBeTruthy());
   });
 });

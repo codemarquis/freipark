@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from './useAuth';
 import { AuthSheet } from './AuthSheet';
 
 export function AccountButton() {
+  const { t } = useTranslation();
   const { user, loading } = useAuth();
   const [sheetVisible, setSheetVisible] = useState(false);
 
@@ -13,13 +15,13 @@ export function AccountButton() {
         style={styles.button}
         onPress={() => setSheetVisible(true)}
         accessibilityRole="button"
-        accessibilityLabel={user ? 'Account' : 'Sign in'}
+        accessibilityLabel={user ? t('account.account') : t('account.signIn')}
       >
         {loading ? (
           <ActivityIndicator size="small" color="#6366f1" />
         ) : (
           <Text style={styles.text} numberOfLines={1}>
-            {user ? (user.email ?? 'Account') : 'Sign in'}
+            {user ? (user.email ?? t('account.account')) : t('account.signIn')}
           </Text>
         )}
       </Pressable>

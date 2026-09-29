@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { posthog } from '../../lib/posthog';
@@ -9,30 +11,32 @@ import type { SpotRow } from '../../lib/types';
 
 const SNAP_POINTS = ['35%', '55%'];
 
+// Distances stay in m/km — identical abbreviations across de/en/tr, no
+// translation needed. Durations do need it ("min"/"Min"/"dk" etc.).
 function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
 }
 
-function formatDuration(s: number): string {
-  if (s < 60) return '<1 min';
-  if (s < 3600) return `${Math.round(s / 60)} min`;
+function formatDuration(s: number, t: TFunction): string {
+  if (s < 60) return t('spot.lessThanOneMin');
+  if (s < 3600) return `${Math.round(s / 60)} ${t('spot.minutesShort')}`;
   const h = Math.floor(s / 3600);
   const m = Math.round((s % 3600) / 60);
-  return `${h}h ${m}m`;
+  return t('spot.hoursMinutes', { h, m });
 }
 
-const ACCESS_LABEL: Record<NonNullable<SpotRow['access']>, string> = {
-  free: 'Free parking',
-  paid: 'Paid parking',
-  permit: 'Permit required',
-  private: 'Private',
+const ACCESS_LABEL_KEY: Record<NonNullable<SpotRow['access']>, string> = {
+  free: 'spot.accessFree',
+  paid: 'spot.accessPaid',
+  permit: 'spot.accessPermit',
+  private: 'spot.accessPrivate',
 };
 
-const TYPE_LABEL: Record<SpotRow['spot_type'], string> = {
-  street: 'Street parking',
-  garage: 'Parking garage',
-  lot: 'Parking lot',
-  zone: 'Parking zone',
+const TYPE_LABEL_KEY: Record<SpotRow['spot_type'], string> = {
+  street: 'spot.typeStreet',
+  garage: 'spot.typeGarage',
+  lot: 'spot.typeLot',
+  zone: 'spot.typeZone',
 };
 
 interface SpotDetailSheetProps {
@@ -43,6 +47,7 @@ interface SpotDetailSheetProps {
 }
 
 export function SpotDetailSheet({ spot, onClose, route, locationDenied }: SpotDetailSheetProps) {
+  const { t } = useTranslation();
   const sheetRef = useRef<BottomSheetMethods>(null);
   const [appleMapsAvailable, setAppleMapsAvailable] = useState(false);
   const [googleMapsAvailable, setGoogleMapsAvailable] = useState(false);
@@ -105,46 +110,44 @@ export function SpotDetailSheet({ spot, onClose, route, locationDenied }: SpotDe
       <BottomSheetView style={styles.content}>
         {spot && (
           <>
-            <Text style={styles.type}>{TYPE_LABEL[spot.spot_type]}</Text>
+            <Text style={styles.type}>{t(TYPE_LABEL_KEY[spot.spot_type])}</Text>
             <Text style={styles.access}>
-              {spot.access ? ACCESS_LABEL[spot.access] : 'Access unknown'}
+              {spot.access ? t(ACCESS_LABEL_KEY[spot.access]) : t('spot.accessUnknown')}
             </Text>
 
             {locationDenied ? (
-              <Text style={styles.routeHint}>Enable location to see directions.</Text>
+              <Text style={styles.routeHint}>{t('spot.enableLocationForDirections')}</Text>
             ) : route.loading ? (
-              <Text style={styles.routeHint}>Getting directions…</Text>
+              <Text style={styles.routeHint}>{t('spot.gettingDirections')}</Text>
             ) : route.data ? (
               <Text style={styles.routeInfo}>
-                {formatDistance(route.data.distance_m)} · {formatDuration(route.data.duration_s)}
+                {formatDistance(route.data.distance_m)} · {formatDuration(route.data.duration_s, t)}
               </Text>
             ) : route.error ? (
-              <Text style={styles.routeHint}>Directions unavailable.</Text>
+              <Text style={styles.routeHint}>{t('spot.directionsUnavailable')}</Text>
             ) : null}
 
             {spot.operator && (
-              <Text style={styles.meta}>Operator: {spot.operator}</Text>
+              <Text style={styles.meta}>{t('spot.operator', { name: spot.operator })}</Text>
             )}
             {spot.capacity != null && (
-              <Text style={styles.meta}>Capacity: {spot.capacity}</Text>
+              <Text style={styles.meta}>{t('spot.capacity', { count: spot.capacity })}</Text>
             )}
             {spot.access === 'permit' && (
-              <Text style={styles.permit}>
-                A valid parking permit is required for this spot.
-              </Text>
+              <Text style={styles.permit}>{t('spot.permitRequired')}</Text>
             )}
             {spot.access === 'paid' && <PaymentLinks />}
 
             {appleMapsAvailable && (
               <Pressable style={styles.mapsButton} onPress={openInAppleMaps}>
                 <Text style={styles.mapsButtonText}>
-                  {Platform.OS === 'ios' ? 'Open in Apple Maps' : 'Open in Maps'}
+                  {Platform.OS === 'ios' ? t('spot.openInAppleMaps') : t('spot.openInMaps')}
                 </Text>
               </Pressable>
             )}
             {googleMapsAvailable && (
               <Pressable style={styles.mapsButton} onPress={openInGoogleMaps}>
-                <Text style={styles.mapsButtonText}>Open in Google Maps</Text>
+                <Text style={styles.mapsButtonText}>{t('spot.openInGoogleMaps')}</Text>
               </Pressable>
             )}
           </>

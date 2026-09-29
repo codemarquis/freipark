@@ -1,0 +1,71 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "settings": "Settings"
+  },
+  "account": {
+    "signIn": "Sign in",
+    "account": "Account",
+    "signedIn": "Signed in",
+    "signOut": "Sign Out",
+    "deleteAccount": "Delete Account",
+    "deleteAccountConfirmTitle": "Delete account?",
+    "deleteAccountConfirmMessage": "This permanently deletes your account and cannot be undone."
+  },
+  "auth": {
+    "tabEmail": "Email",
+    "tabPhone": "Phone",
+    "tabSignIn": "Sign In",
+    "tabSignUp": "Sign Up",
+    "emailPlaceholder": "Email",
+    "passwordPlaceholder": "Password",
+    "continue": "Continue",
+    "phonePlaceholder": "Phone number, e.g. +491701234567",
+    "sendCode": "Send Code",
+    "verificationCodePlaceholder": "Verification code",
+    "verify": "Verify",
+    "useDifferentNumber": "Use a different number",
+    "resendCode": "Resend code",
+    "errorInvalidEmail": "Enter a valid email address.",
+    "errorPasswordTooShort": "Password must be at least 6 characters.",
+    "infoCheckEmail": "Check your email to confirm your account.",
+    "errorInvalidPhone": "Enter a phone number in international format, e.g. +491701234567.",
+    "infoCodeSent": "Enter the code sent to {{phone}}.",
+    "errorInvalidCode": "Enter the code from your text message."
+  },
+  "map": {
+    "locating": "Locating…",
+    "enableLocationBanner": "Enable location to find spots near you",
+    "attribution": "© OpenStreetMap contributors"
+  },
+  "spot": {
+    "accessFree": "Free parking",
+    "accessPaid": "Paid parking",
+    "accessPermit": "Permit required",
+    "accessPrivate": "Private",
+    "accessUnknown": "Access unknown",
+    "typeStreet": "Street parking",
+    "typeGarage": "Parking garage",
+    "typeLot": "Parking lot",
+    "typeZone": "Parking zone",
+    "enableLocationForDirections": "Enable location to see directions.",
+    "gettingDirections": "Getting directions…",
+    "directionsUnavailable": "Directions unavailable.",
+    "operator": "Operator: {{name}}",
+    "capacity": "Capacity: {{count}}",
+    "permitRequired": "A valid parking permit is required for this spot.",
+    "openInAppleMaps": "Open in Apple Maps",
+    "openInMaps": "Open in Maps",
+    "openInGoogleMaps": "Open in Google Maps",
+    "minutesShort": "min",
+    "lessThanOneMin": "<1 min",
+    "hoursMinutes": "{{h}}h {{m}}m"
+  },
+  "payment": {
+    "openEasyPark": "Open EasyPark"
+  },
+  "search": {
+    "placeholder": "Search in Germany…"
+  }
+}
