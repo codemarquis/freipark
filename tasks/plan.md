@@ -1447,7 +1447,27 @@ Frontend slice                          ▼
 
 ### R7 — Wire into the detail sheet
 
-- [ ] **R7: Status line + `ReportButtons` in `SpotDetailSheet`; refetch from `MapScreen`**
+- [x] **R7: Status line + `ReportButtons` in `SpotDetailSheet`; refetch from `MapScreen` — done 2026-10-07; not yet seen on a device (C1).**
+  Tests written first: 9 new in `SpotDetailSheet.test.tsx` (7 failed
+  before the change; the 2 "hidden" cases passed trivially), then 36/36;
+  full suite 165/165 across 10 suites; `npx tsc --noEmit` clean.
+  `ReportButtons` is mocked in these tests (it has its own); the existing
+  helper now passes the two new required props.
+  - Status line: "Reported free/full · N min ago", "just now" under a
+    minute, hidden when expired or absent. A one-minute interval (only
+    while a spot is shown) keeps the age current and drops the line at
+    30 min — covered by a fake-timer test.
+  - The user's own report shows immediately (`justReported`), because
+    `selectedSpot` is the row captured at tap time and isn't replaced by
+    the refetch. It's keyed by spot id, so it doesn't leak onto the next
+    spot opened — tested.
+  - `MapScreen`: `onReported={refetch}` (rings update) and a second
+    `AuthSheet` for signed-out report taps, rendered after the spot sheet
+    so it sits on top. `AuthSheet` starts at `index={-1}`, so the extra
+    instance is invisible until opened.
+  - **For C1:** the sheet's snap points (35% / 55%) were sized before the
+    report row existed; check nothing important falls below the first
+    snap point.
   - Status line uses `lastReport` (optimistic) over `spot.report_status` / `report_at`, hidden when inactive; minutes re-render once a minute while the sheet is open
   - `MapScreen` passes `onReported={refetch}` and the existing `locationDenied`
   - `MapScreen` renders an `AuthSheet` for `onSignInRequired` (see R6's deviation note)

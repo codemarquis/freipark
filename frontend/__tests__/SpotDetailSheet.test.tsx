@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import '../src/i18n';
 import { SpotDetailSheet } from '../src/features/map/SpotDetailSheet';
 import type { SpotRow } from '../src/lib/types';
@@ -25,6 +25,32 @@ jest.mock('@gorhom/bottom-sheet', () => {
 
 jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(false);
 
+// ReportButtons has its own tests; here it only needs to hand back its
+// callbacks so the sheet's wiring can be exercised.
+const MOCK_REPORT = { spotId: '1', status: 'free', reportedAt: '' };
+jest.mock('../src/features/reports/ReportButtons', () => {
+  const React = require('react');
+  const { Pressable, Text, View } = require('react-native');
+  return {
+    ReportButtons: ({ spot, locationDenied, onReported, onSignInRequired }: any) =>
+      React.createElement(
+        View,
+        { testID: `report-buttons-${spot.id}-${locationDenied ? 'denied' : 'ok'}` },
+        React.createElement(
+          Pressable,
+          { onPress: () => onReported({ ...MOCK_REPORT, spotId: spot.id, reportedAt: new Date().toISOString() }) },
+          React.createElement(Text, null, 'mock report free'),
+        ),
+        React.createElement(
+          Pressable,
+          { onPress: onSignInRequired },
+          React.createElement(Text, null, 'mock sign in'),
+        ),
+      ),
+  };
+});
+
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const IDLE: RouteState = { data: null, loading: false, error: null };
@@ -42,18 +68,27 @@ const BASE: SpotRow = {
 };
 
 // @testing-library/react-native v14 made render() async — callers must await.
-function renderSheet(
-  spot: SpotRow | null,
-  opts: { route?: RouteState; locationDenied?: boolean } = {},
-) {
-  return render(
+const onReported = jest.fn();
+const onSignInRequired = jest.fn();
+
+function sheet(spot: SpotRow | null, opts: { route?: RouteState; locationDenied?: boolean } = {}) {
+  return (
     <SpotDetailSheet
       spot={spot}
       onClose={jest.fn()}
       route={opts.route ?? IDLE}
       locationDenied={opts.locationDenied ?? false}
-    />,
+      onReported={onReported}
+      onSignInRequired={onSignInRequired}
+    />
   );
+}
+
+function renderSheet(
+  spot: SpotRow | null,
+  opts: { route?: RouteState; locationDenied?: boolean } = {},
+) {
+  return render(sheet(spot, opts));
 }
 
 // ─── no spot ─────────────────────────────────────────────────────────────────
@@ -216,5 +251,90 @@ describe('location denied', () => {
       },
     });
     expect(screen.queryByText(/500 m/)).toBeNull();
+  });
+});
+
+// ─── crowdsourced reports ───────────────────────────────────────────────────
+
+describe('spot reports', () => {
+  const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+
+  beforeEach(() => {
+    onReported.mockClear();
+    onSignInRequired.mockClear();
+  });
+
+  it('shows the latest active report with its age', async () => {
+    await renderSheet({ ...BASE, report_status: 'full', report_at: minutesAgo(4) });
+    expect(screen.getByText('Reported full · 4 min ago')).toBeTruthy();
+  });
+
+  it('says "just now" for a report under a minute old', async () => {
+    await renderSheet({ ...BASE, report_status: 'free', report_at: minutesAgo(0.2) });
+    expect(screen.getByText('Reported free · just now')).toBeTruthy();
+  });
+
+  it('hides an expired report', async () => {
+    await renderSheet({ ...BASE, report_status: 'free', report_at: minutesAgo(31) });
+    expect(screen.queryByText(/^Reported /)).toBeNull();
+  });
+
+  it('shows no status line without a report', async () => {
+    await renderSheet(BASE);
+    expect(screen.queryByText(/^Reported /)).toBeNull();
+  });
+
+  it('renders the report buttons for the spot, passing locationDenied through', async () => {
+    await renderSheet(BASE, { locationDenied: true });
+    expect(screen.getByTestId('report-buttons-1-denied')).toBeTruthy();
+  });
+
+  it('shows a new report immediately and tells the parent', async () => {
+    await renderSheet({ ...BASE, report_status: 'full', report_at: minutesAgo(12) });
+    await act(async () => {
+      fireEvent.press(screen.getByText('mock report free'));
+    });
+    expect(screen.getByText('Reported free · just now')).toBeTruthy();
+    expect(screen.queryByText('Reported full · 12 min ago')).toBeNull();
+    expect(onReported).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not carry a just-made report over to a different spot', async () => {
+    const { rerender } = await renderSheet(BASE);
+    await act(async () => {
+      fireEvent.press(screen.getByText('mock report free'));
+    });
+    expect(screen.getByText('Reported free · just now')).toBeTruthy();
+
+    await rerender(sheet({ ...BASE, id: '2' }));
+    expect(screen.queryByText(/^Reported /)).toBeNull();
+  });
+
+  it('passes sign-in requests up', async () => {
+    await renderSheet(BASE);
+    await act(async () => {
+      fireEvent.press(screen.getByText('mock sign in'));
+    });
+    expect(onSignInRequired).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the age current while the sheet stays open', async () => {
+    jest.useFakeTimers({ now: Date.parse('2026-10-07T12:00:00Z') });
+    try {
+      await renderSheet({ ...BASE, report_status: 'free', report_at: '2026-10-07T11:58:00Z' });
+      expect(screen.getByText('Reported free · 2 min ago')).toBeTruthy();
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(60_000);
+      });
+      expect(screen.getByText('Reported free · 3 min ago')).toBeTruthy();
+
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(28 * 60_000);
+      });
+      expect(screen.queryByText(/^Reported /)).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

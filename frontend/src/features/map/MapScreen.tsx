@@ -14,6 +14,7 @@ import { RouteLayer } from './RouteLayer';
 import { SearchBar } from './SearchBar';
 import { SpotDetailSheet } from './SpotDetailSheet';
 import { AccountButton } from '../auth/AccountButton';
+import { AuthSheet } from '../auth/AuthSheet';
 import type { GeoResult } from './useGeocoder';
 import type { SpotRow } from '../../lib/types';
 
@@ -64,7 +65,9 @@ export function MapScreen() {
   const [locationLoading, setLocationLoading] = useState(true);
   const [locationDenied, setLocationDenied] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const { geojson, onRegionDidChange } = useSpots();
+  const { geojson, onRegionDidChange, refetch } = useSpots();
+  // Opened when a signed-out user taps a report button in SpotDetailSheet.
+  const [reportSignInVisible, setReportSignInVisible] = useState(false);
   const route = useRoute(userLocation, selectedSpot);
 
   useEffect(() => {
@@ -200,7 +203,10 @@ export function MapScreen() {
         onClose={handleSheetClose}
         route={route}
         locationDenied={locationDenied}
+        onReported={refetch}
+        onSignInRequired={() => setReportSignInVisible(true)}
       />
+      <AuthSheet visible={reportSignInVisible} onClose={() => setReportSignInVisible(false)} />
     </View>
   );
 }

@@ -6,6 +6,9 @@ import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { posthog } from '../../lib/posthog';
 import { PaymentLinks } from './PaymentLinks';
+import { ReportButtons } from '../reports/ReportButtons';
+import { activeReport } from '../reports/reportStatus';
+import type { SubmittedReport } from '../reports/useReportSpot';
 import type { RouteState } from './useRoute';
 import type { SpotRow } from '../../lib/types';
 
@@ -44,13 +47,50 @@ interface SpotDetailSheetProps {
   onClose: () => void;
   route: RouteState;
   locationDenied: boolean;
+  onReported: (report: SubmittedReport) => void;
+  onSignInRequired: () => void;
 }
 
-export function SpotDetailSheet({ spot, onClose, route, locationDenied }: SpotDetailSheetProps) {
+const MINUTE_MS = 60_000;
+
+export function SpotDetailSheet({
+  spot,
+  onClose,
+  route,
+  locationDenied,
+  onReported,
+  onSignInRequired,
+}: SpotDetailSheetProps) {
   const { t } = useTranslation();
   const sheetRef = useRef<BottomSheetMethods>(null);
   const [appleMapsAvailable, setAppleMapsAvailable] = useState(false);
   const [googleMapsAvailable, setGoogleMapsAvailable] = useState(false);
+  // The user's own report, shown straight away. `spot` is the row captured
+  // when the marker was tapped, so it won't reflect a report made since.
+  const [justReported, setJustReported] = useState<SubmittedReport | null>(null);
+  // Ticks once a minute so "N min ago" stays current and expired reports
+  // disappear while the sheet is open.
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!spot) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), MINUTE_MS);
+    return () => clearInterval(timer);
+  }, [spot]);
+
+  const report = activeReport(
+    justReported && justReported.spotId === spot?.id
+      ? { report_status: justReported.status, report_at: justReported.reportedAt }
+      : (spot ?? {}),
+    now,
+  );
+
+  function handleReported(submitted: SubmittedReport) {
+    setJustReported(submitted);
+    setNow(Date.now());
+    onReported(submitted);
+  }
 
   useEffect(() => {
     if (!spot) {
@@ -114,6 +154,17 @@ export function SpotDetailSheet({ spot, onClose, route, locationDenied }: SpotDe
             <Text style={styles.access}>
               {spot.access ? t(ACCESS_LABEL_KEY[spot.access]) : t('spot.accessUnknown')}
             </Text>
+            {report && (
+              <Text
+                style={[styles.report, report.status === 'free' ? styles.reportFree : styles.reportFull]}
+              >
+                {report.minutesAgo < 1
+                  ? t(report.status === 'free' ? 'report.statusFreeNow' : 'report.statusFullNow')
+                  : t(report.status === 'free' ? 'report.statusFree' : 'report.statusFull', {
+                      minutes: report.minutesAgo,
+                    })}
+              </Text>
+            )}
 
             {locationDenied ? (
               <Text style={styles.routeHint}>{t('spot.enableLocationForDirections')}</Text>
@@ -137,6 +188,13 @@ export function SpotDetailSheet({ spot, onClose, route, locationDenied }: SpotDe
               <Text style={styles.permit}>{t('spot.permitRequired')}</Text>
             )}
             {spot.access === 'paid' && <PaymentLinks />}
+
+            <ReportButtons
+              spot={spot}
+              locationDenied={locationDenied}
+              onReported={handleReported}
+              onSignInRequired={onSignInRequired}
+            />
 
             {appleMapsAvailable && (
               <Pressable style={styles.mapsButton} onPress={openInAppleMaps}>
@@ -181,6 +239,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#475569',
     marginBottom: 12,
+  },
+  // Same teal / near-black as the marker ring and the report buttons.
+  report: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: -6,
+    marginBottom: 12,
+  },
+  reportFree: {
+    color: '#0f766e',
+  },
+  reportFull: {
+    color: '#111827',
   },
   meta: {
     fontSize: 14,
