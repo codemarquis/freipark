@@ -1560,7 +1560,26 @@ Frontend slice                          ▼
 
 ### R9 — Docs that ship with the feature
 
-- [ ] **R9: `PRIVACY_POLICY.md`, `CLAUDE.md`, `SPEC-infra.md`**
+- [x] **R9: `PRIVACY_POLICY.md`, `CLAUDE.md`, `SPEC-infra.md` — done 2026-10-07 (docs ahead of the R10 rollout: they describe the feature as built, not yet live).**
+  - Privacy policy: new *Spot reports* subsection (what's stored — account
+    ID, spot, status, time, distance; coordinates read once and **not**
+    stored; never shown who reported; 30-min display, deletion after the
+    retention window or on account deletion), the report check added to
+    *Location data*, two rows in the legal-basis table, retention and
+    erasure lines. Retention, backup inclusion and the Art. 6(1)(f) basis
+    are marked `[CONFIRM …]` like the rest of the draft.
+  - **Found, not fixed:** the policy says "no third-party analytics SDKs,
+    no crash reporting SDKs" — false since Sentry (`e46985e`, incl.
+    session replay) and PostHog (`5479c2f`) shipped. Marked in place with
+    a ⚠️ OUT OF DATE note listing the four sections that need rewriting;
+    describing what those SDKs actually collect is separate work.
+  - `CLAUDE.md`: MVP scope now includes crowdsourced free/full reports
+    (dropped "no real-time availability"); module order gains
+    `spot-reports`; `/src/features/reports` listed; RLS line covers
+    `spot_reports` (no client access; RPCs only; reporter never returned).
+  - `SPEC-infra.md` § Phase 2: superseded note pointing at
+    `SPEC-spot-reports.md`, listing what changed from the sketch and that
+    the user-base precondition was waived.
   - Privacy policy: new "Spot reports" section — what's stored (account id, spot, status, time, distance; **not** coordinates), why, 30-day retention, deleted with the account
   - `CLAUDE.md`: MVP-scope line no longer says "no real-time availability"; it describes crowdsourced reports instead; module order gains `spot-reports`
   - `SPEC-infra.md` § Phase 2: pointer to `SPEC-spot-reports.md` as the authoritative version

@@ -6,7 +6,7 @@ You are acting as the lead architect, frontend developer, and backend engineer f
 
 - **What it does:** Shows drivers where free and paid street parking spots are. For paid spots, hands off to EasyPark/ParkNow via deep link — no in-app payment.
 - **First city:** Berlin (OSM Geofabrik extract). City is a first-class schema concept; adding a second city is an additive operation, not a rework.
-- **MVP scope:** Spot locations and type (free / paid / permit zone) only. No booking, no in-app payments, no real-time availability, no push notifications.
+- **MVP scope:** Spot locations and type (free / paid / permit zone), plus crowdsourced "free / full" reports from signed-in users that expire after 30 minutes (`SPEC-spot-reports.md`) — the only availability signal; no sensor or operator feeds. No booking, no in-app payments, no push notifications.
 - **Primary users:** Berlin commuters and tourists (initially).
 
 ## Tech Stack
@@ -26,16 +26,16 @@ You are acting as the lead architect, frontend developer, and backend engineer f
 ## Workflow Rules (Strict)
 
 1. **Spec first:** Before writing code, update or create the relevant `SPEC-<module>.md` file with proposed changes.
-2. **Modular slices:** Build in dependency order (infra → map → auth → ...). Do not build the whole app at once.
+2. **Modular slices:** Build in dependency order (infra → map → auth → spot-reports → ...). Do not build the whole app at once.
 3. **Testing:** After every functional change, write or update the corresponding tests. Never commit untested code.
 4. **No `any` types:** Strict TypeScript on the frontend. Strict Pydantic models on the backend. No exceptions.
 
 ## Architecture Guidelines
 
-- **Frontend structure:** Feature-based (`/src/features/map`, `/src/features/auth`). No booking or payment features.
+- **Frontend structure:** Feature-based (`/src/features/map`, `/src/features/auth`, `/src/features/reports`). No booking or payment features.
 - **Map:** MapLibre reads PMTiles directly from Cloudflare R2 via HTTP range requests. Handle high-density markers with clustering — Berlin alone has thousands of spots.
 - **City as first-class concept:** All spot data has a `city_id` FK to the `cities` table. The OSM import script is parameterized by city slug (`--city berlin`). Adding a new city = one `INSERT` into `cities` + one import run. No schema migration needed.
-- **RLS:** `parking_spots` is publicly readable (no auth required to browse). All writes go through the server-side import script using the service role key.
+- **RLS:** `parking_spots` is publicly readable (no auth required to browse). All writes go through the server-side import script using the service role key. `spot_reports` has no client access at all: signed-in users write through the `report_spot` RPC, everyone reads through `spots_in_bbox`, and neither ever returns who reported.
 
 ## Commands
 

@@ -39,15 +39,35 @@ your device Settings), we collect your **device's location** to:
 - Center the map on your current position
 - Show parking spots near you
 - Calculate directions to a spot you select
+- Check that you're at a spot when you report it as free or full (see
+  *Spot reports* below)
 
-Location data is used to make requests to our own servers (for directions)
-and is **not** continuously tracked in the background — only while you
-have the app open and in use.
+Location data is used to make requests to our own servers (for directions
+and for the report check) and is **not** continuously tracked in the
+background — only while you have the app open and in use.
 
 ### Search queries
 When you search for a location, your search text is sent to
 **OpenStreetMap's Nominatim service** (a third-party, publicly-run
 geocoding service) to find matching places. See § 4 below.
+
+### Spot reports
+If you're signed in, you can report whether a parking spot has space
+("free") or is full. Other users see that a spot was reported free or
+full and how long ago — **never who reported it**.
+
+When you send a report, the app reads your current location once and
+sends it to our server, which checks you're within 150 m of a street
+spot (300 m for car parks and zones). **Your coordinates are not
+stored.** We store:
+- your account ID
+- the spot
+- the report ("free" or "full") and when you made it
+- your distance from the spot at that moment (in metres)
+
+Reports are shown for 30 minutes and deleted after
+[CONFIRM: 30 days — the value the daily deletion job is configured with].
+Your reports are also deleted immediately if you delete your account.
 
 ### Server logs
 Like virtually all web services, our servers automatically log standard
@@ -59,6 +79,12 @@ request timestamp, requested endpoint). [CONFIRM RETENTION PERIOD — e.g.
 - No advertising identifiers, no third-party analytics SDKs, no crash
   reporting SDKs, no ad networks — verified against the app's actual
   dependencies, not assumed
+  **[⚠️ OUT OF DATE — MUST FIX BEFORE PUBLISHING: the app now includes
+  Sentry (crash reporting and session replay) and PostHog (product
+  analytics). This line, § 3, § 4 ("No other third parties") and § 10
+  must describe what each collects, where it's processed, and the legal
+  basis. Found 2026-10-07 while adding the spot-reports section; not yet
+  rewritten.]**
 - No push notification tokens (the app does not send push notifications)
 - No payment or card information (see § 5)
 - No background/continuous location tracking
@@ -70,6 +96,8 @@ request timestamp, requested endpoint). [CONFIRM RETENTION PERIOD — e.g.
 | Email/phone + password | Create and secure your account | Performance of a contract (Art. 6(1)(b)) |
 | Location (while app is open) | Show nearby spots, calculate routes | Consent (Art. 6(1)(a)) — you grant this via the OS permission prompt |
 | Search query text | Return matching locations | Performance of a contract (Art. 6(1)(b)) |
+| Spot reports (account ID, spot, status, time, distance) | Show other users whether a spot has space; prevent spam (rate limits, distance check) | Performance of a contract (Art. 6(1)(b)) — you choose to send a report. Keeping reports for [CONFIRM: 30 days] after they stop being shown, to tune how long reports stay visible: legitimate interest (Art. 6(1)(f)) [CONFIRM with reviewer] |
+| Location at the moment you report | Check you're at the spot; not stored | Consent (Art. 6(1)(a)) via the OS permission prompt |
 | Server logs | Security, abuse prevention, debugging | Legitimate interest (Art. 6(1)(f)) |
 
 ## 4. Who we share data with
@@ -104,6 +132,10 @@ terms and privacy practices apply.
   [CONFIRM: if any location data is persisted anywhere, e.g. logs,
   disclose it here specifically]
 - **Server logs**: [CONFIRM RETENTION PERIOD]
+- **Spot reports**: shown to others for 30 minutes, deleted after
+  [CONFIRM: 30 days], or immediately when you delete your account.
+  [CONFIRM: whether reports are included in database backups, and the
+  backup retention period if so]
 
 ## 7. Your rights (GDPR)
 
@@ -112,7 +144,7 @@ If you are in the EU/EEA, you have the right to:
 - **Rectify** inaccurate data
 - **Erase** your data ("right to be forgotten") — you can delete your
   account at any time from the app: tap your account button, then
-  "Delete Account"
+  "Delete Account" — this also deletes every spot report you've made
 - **Restrict** or **object** to certain processing
 - **Data portability** — receive your data in a portable format
 - **Withdraw consent** (e.g., revoke location permission at any time in

@@ -853,6 +853,13 @@ The MVP shows static parking spot locations from OSM. The following phases are d
 
 ### Phase 2: Manual Crowdsourced Reports
 
+> **Superseded by [`SPEC-spot-reports.md`](SPEC-spot-reports.md)** (approved
+> 2026-10-07) — that spec is authoritative. Changes from the sketch below:
+> `'taken'` → `'full'`; no stored `expires_at` (computed from
+> `reported_at`); reads and writes only via `SECURITY DEFINER` RPCs; a
+> distance check and rate limits; 30-day retention. The precondition
+> below was explicitly waived when the spec was approved.
+
 *Precondition: small active user base established.*
 
 Users mark a spot as "free" or "taken" via a button tied to a `spot_id` and their account. Reports expire after 30 minutes. Requires auth module to be live.
