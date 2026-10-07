@@ -98,8 +98,17 @@ export function SpotLayer({ geojson, onSpotPress, cameraRef }: SpotLayerProps) {
             '#94a3b8',
           ],
           'circle-radius': 6,
-          'circle-stroke-width': 1,
-          'circle-stroke-color': '#ffffff',
+          // Fill means access type; the ring means a recent crowdsourced
+          // report (SPEC-spot-reports.md § Map markers), so the two never
+          // collide. No report → the original thin white ring.
+          'circle-stroke-width': ['match', ['get', 'report_status'], ['free', 'full'], 3, 1],
+          'circle-stroke-color': [
+            'match',
+            ['get', 'report_status'],
+            'free', '#14b8a6',
+            'full', '#111827',
+            '#ffffff',
+          ],
         }}
       />
     </GeoJSONSource>

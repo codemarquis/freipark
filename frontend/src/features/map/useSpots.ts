@@ -27,9 +27,13 @@ export function useSpots() {
   // the wrong (often much larger, since it's usually the earlier, more
   // zoomed-out bbox) result set.
   const requestId = useRef(0);
+  // The most recently requested bbox, so refetch() can reload what's on
+  // screen (e.g. right after the user submits a spot report).
+  const lastBbox = useRef<Bbox>(BERLIN_INITIAL);
 
   const fetchBbox = useCallback(async (bbox: Bbox) => {
     const id = ++requestId.current;
+    lastBbox.current = bbox;
     posthogLogger.info('parking_spots_fetch_started');
     console.log('[useSpots] fetching bbox', bbox);
     const { data, error } = await supabase.rpc('spots_in_bbox', {
@@ -76,5 +80,9 @@ export function useSpots() {
     [fetchBbox],
   );
 
-  return { geojson, onRegionDidChange };
+  // Goes through fetchBbox, so the stale-response guard above applies: a
+  // refetch supersedes any older request still in flight.
+  const refetch = useCallback(() => fetchBbox(lastBbox.current), [fetchBbox]);
+
+  return { geojson, onRegionDidChange, refetch };
 }

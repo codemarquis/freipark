@@ -1374,7 +1374,18 @@ Frontend slice                          ▼
 
 ### R4 — Marker ring and refetch
 
-- [ ] **R4: Ring paint in `SpotLayer`; `refetch()` from `useSpots`**
+- [x] **R4: Ring paint in `SpotLayer`; `refetch()` from `useSpots` — done 2026-10-07; on-device visual check still pending (C1).**
+  Tests written first and seen failing (5), then passing: `npx jest` →
+  125/125 across 8 suites; `npx tsc --noEmit` clean. New
+  `SpotLayer.test.tsx` (not in the original file list) mocks MapLibre's
+  `GeoJSONSource`/`Layer` and asserts the unclustered layer's paint: fill
+  expression unchanged, ring colour/width driven by `report_status` with
+  white/1 as the fallback. A missing property hits the fallback, so spots
+  whose `null` was dropped by the map still render as before.
+  `useSpots.refetch()` reloads the last requested bbox (Berlin initial
+  before any pan) via `fetchBbox`, so the stale-response guard applies —
+  covered by a test where an older in-flight pan resolves after the
+  refetch and is discarded.
   - `spots-unclustered` gets data-driven `circle-stroke-color` / `circle-stroke-width` from `report_status` (spec § Map markers); fill expression untouched
   - `useSpots` remembers the last bbox and returns `refetch()`, which reuses `fetchBbox` (so the stale-response guard still applies)
   - Acceptance: no report → identical paint to today; `refetch()` re-requests the last bbox, or `BERLIN_INITIAL` before any pan

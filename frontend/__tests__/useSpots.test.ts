@@ -137,6 +137,72 @@ describe('useSpots', () => {
       });
     });
 
+    it('refetch re-requests the Berlin initial bbox before any pan', async () => {
+      const { result } = await mountAndFlush();
+
+      await act(async () => {
+        await result.current.refetch();
+      });
+
+      expect(mockRpc).toHaveBeenCalledTimes(1);
+      expect(mockRpc).toHaveBeenCalledWith('spots_in_bbox', {
+        min_lon: 13.28,
+        min_lat: 52.47,
+        max_lon: 13.53,
+        max_lat: 52.57,
+        lim: 2000,
+      });
+    });
+
+    it('refetch re-requests the last panned bbox, without waiting for a debounce', async () => {
+      const { result } = await mountAndFlush();
+
+      await act(async () => {
+        result.current.onRegionDidChange({ nativeEvent: { bounds: [10, 48, 11, 49] } } as any);
+        await jest.advanceTimersByTimeAsync(600);
+      });
+      mockRpc.mockClear();
+
+      await act(async () => {
+        await result.current.refetch();
+      });
+
+      expect(mockRpc).toHaveBeenCalledTimes(1);
+      expect(mockRpc).toHaveBeenCalledWith('spots_in_bbox', {
+        min_lon: 10,
+        min_lat: 48,
+        max_lon: 11,
+        max_lat: 49,
+        lim: 2000,
+      });
+    });
+
+    it('refetch result wins over an older in-flight request', async () => {
+      const { result } = await mountAndFlush();
+
+      let resolveOld: (value: { data: SpotRow[]; error: null }) => void = () => {};
+      mockRpc
+        .mockImplementationOnce(() => new Promise((resolve) => (resolveOld = resolve)))
+        .mockResolvedValueOnce({ data: [{ ...SPOT, id: 'fresh', report_status: 'free' }], error: null });
+
+      await act(async () => {
+        result.current.onRegionDidChange({ nativeEvent: { bounds: [10, 48, 11, 49] } } as any);
+        await jest.advanceTimersByTimeAsync(600);
+      });
+      await act(async () => {
+        await result.current.refetch();
+      });
+      await act(async () => {
+        resolveOld({ data: [{ ...SPOT, id: 'stale' }], error: null });
+      });
+
+      expect(result.current.geojson.features).toHaveLength(1);
+      expect(result.current.geojson.features[0].properties).toMatchObject({
+        id: 'fresh',
+        report_status: 'free',
+      });
+    });
+
     it('discards a stale response that resolves after a newer request', async () => {
       const { result } = await mountAndFlush();
 
