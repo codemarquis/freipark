@@ -134,8 +134,9 @@ terms and privacy practices apply.
 - **Server logs**: [CONFIRM RETENTION PERIOD]
 - **Spot reports**: shown to others for 30 minutes, deleted after
   [CONFIRM: 30 days], or immediately when you delete your account.
-  [CONFIRM: whether reports are included in database backups, and the
-  backup retention period if so]
+  Reports are included in our nightly database backups, which are kept
+  for 14 days, so a deleted report can remain in a backup for up to 14
+  more days before that backup is itself deleted.
 
 ## 7. Your rights (GDPR)
 

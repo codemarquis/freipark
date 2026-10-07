@@ -19,6 +19,13 @@
 # backup's data restores cleanly on top. Matches the same tables SS5
 # migrated from managed, and the same "no --disable-triggers" lesson
 # from SS5/SS6: real FK/trigger enforcement stays on during restore.
+#
+# public.spot_reports added 2026-10-07 (migration 007, tasks/plan.md R10).
+# It references parking_spots and auth.users, both in this same dump;
+# pg_dump emits table data in FK order, so the reports restore after
+# the rows they point to. Backups are kept RETENTION_DAYS (14) — shorter
+# than the 30-day report retention, so no report outlives its window in
+# a backup by more than 14 days.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -33,6 +40,7 @@ echo "[backup] dumping self-hosted db (data-only)..."
 sudo docker compose exec -T db pg_dump -U supabase_admin -d postgres \
   --data-only --no-owner \
   -t public.cities -t public.parking_spots -t auth.users -t auth.identities \
+  -t public.spot_reports \
   | gzip > "$DUMP_FILE"
 
 SIZE=$(du -h "$DUMP_FILE" | cut -f1)

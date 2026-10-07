@@ -1590,10 +1590,17 @@ Frontend slice                          ▼
 
 - [ ] **R10: Apply `007` to production, release the app, verify live**
   - **Ask first** before each production step
-  - **Decide first:** add `-t public.spot_reports` to `backup_db.sh`, or
-    accept that reports (short-lived by design) aren't backed up. If added,
-    the restore order still works: `pg_dump --data-only` orders by FKs and
-    `auth.users` is in the same dump.
+  - [x] **Decided 2026-10-07: back up `spot_reports`.** Added
+    `-t public.spot_reports` to `backup_db.sh`. Verified locally before
+    any deploy: dumped with the script's exact flags (one committed test
+    report present) — COPY order `auth.users → auth.identities → cities →
+    parking_spots → spot_reports`; then, in one rolled-back transaction,
+    truncated all five tables and restored the dump with FKs enforced →
+    identical counts (33 / 424,911 / 2 / 1 / 1), no errors. Test rows
+    removed afterwards (back to 1 user, 0 reports). Privacy policy now
+    states reports are in nightly backups kept 14 days. **The OVH box only
+    picks this up after `git pull` there (part of step 2 below).**
+  - [x] **Decided 2026-10-07: keep the teal ring** (C1 finding 1).
   - Install the R8 cron entry (`30 3 * * *`, after the backup) — ask first.
   - Order: (1) fresh `backup_db.sh` run; (2) apply `007` on the OVH box as `supabase_admin`; (3) confirm the *current* app still loads spots (old build, new RPC); (4) `EXPLAIN ANALYZE` p95 on prod vs the R2 baseline; (5) app release with the new UI; (6) live checks for spec criteria 4–7, including one real report from a real location
   - Rollback: `DROP FUNCTION` + recreate `002`'s `spots_in_bbox`, `DROP FUNCTION report_spot`, `DROP TABLE spot_reports` — written out and kept in this task's notes *before* step 2
