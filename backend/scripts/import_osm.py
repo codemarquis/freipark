@@ -41,14 +41,17 @@ _FILTERS = [
 _UPSERT_SQL = """
 INSERT INTO parking_spots (
     city_id, osm_id, osm_type, spot_type, access,
-    operator, capacity, location, geom, tags
+    operator, capacity, location, geom, tags,
+    address_street, address_housenumber, address_postcode, address_source, address_distance_m
 )
 VALUES (
     %(city_id)s, %(osm_id)s, %(osm_type)s, %(spot_type)s, %(access)s,
     %(operator)s, %(capacity)s,
     ST_Centroid(ST_SetSRID(ST_GeomFromGeoJSON(%(geom_json)s), 4326)),
     ST_SetSRID(ST_GeomFromGeoJSON(%(geom_json)s), 4326),
-    %(tags)s::jsonb
+    %(tags)s::jsonb,
+    %(address_street)s, %(address_housenumber)s, %(address_postcode)s,
+    %(address_source)s, %(address_distance_m)s
 )
 ON CONFLICT (osm_id, osm_type) DO UPDATE SET
     spot_type  = EXCLUDED.spot_type,
@@ -58,6 +61,15 @@ ON CONFLICT (osm_id, osm_type) DO UPDATE SET
     location   = EXCLUDED.location,
     geom       = EXCLUDED.geom,
     tags       = EXCLUDED.tags,
+    -- Address (SPEC-spot-address.md): take the row's own address (rules
+    -- 1-2) when it has one, or clear an own-tags/street-name address whose
+    -- tags are gone; otherwise keep a nearest-rule address until the
+    -- address step after the upsert refreshes it.
+    address_street      = CASE WHEN (EXCLUDED.address_source IS NOT NULL OR parking_spots.address_source IN ('own_tags', 'street_name')) THEN EXCLUDED.address_street      ELSE parking_spots.address_street      END,
+    address_housenumber = CASE WHEN (EXCLUDED.address_source IS NOT NULL OR parking_spots.address_source IN ('own_tags', 'street_name')) THEN EXCLUDED.address_housenumber ELSE parking_spots.address_housenumber END,
+    address_postcode    = CASE WHEN (EXCLUDED.address_source IS NOT NULL OR parking_spots.address_source IN ('own_tags', 'street_name')) THEN EXCLUDED.address_postcode    ELSE parking_spots.address_postcode    END,
+    address_distance_m  = CASE WHEN (EXCLUDED.address_source IS NOT NULL OR parking_spots.address_source IN ('own_tags', 'street_name')) THEN EXCLUDED.address_distance_m  ELSE parking_spots.address_distance_m  END,
+    address_source      = CASE WHEN (EXCLUDED.address_source IS NOT NULL OR parking_spots.address_source IN ('own_tags', 'street_name')) THEN EXCLUDED.address_source      ELSE parking_spots.address_source      END,
     updated_at = NOW()
 """
 
@@ -238,6 +250,23 @@ def _is_parking_feature(osm_type: str, props: dict) -> bool:
     return osm_type == "way" and any(tag in props for tag in _PARKING_LANE_TAGS)
 
 
+def _own_address(props: dict) -> dict:
+    """Address rules 1-2 (SPEC-spot-address.md): the spot's own addr:* tags,
+    else a street-parking way's own name (the street itself). Rules 3-4
+    (nearest address point / named street) run after the upsert."""
+    empty = {"address_street": None, "address_housenumber": None, "address_postcode": None,
+             "address_source": None, "address_distance_m": None}
+    if props.get("addr:street"):
+        return {"address_street": props["addr:street"],
+                "address_housenumber": props.get("addr:housenumber") or None,
+                "address_postcode": props.get("addr:postcode") or None,
+                "address_source": "own_tags", "address_distance_m": 0.0}
+    if _spot_type(props) == "street" and props.get("name"):
+        return {**empty, "address_street": props["name"], "address_source": "street_name",
+                "address_distance_m": 0.0}
+    return empty
+
+
 def _feature_to_row(feature: dict, city_id: str) -> dict | None:
     props = feature.get("properties") or {}
     geom  = feature.get("geometry")
@@ -252,6 +281,8 @@ def _feature_to_row(feature: dict, city_id: str) -> dict | None:
         return None
     osm_id = int(osm_id_raw)
 
+    street_addr = _own_address(props)
+
     cap_raw  = props.get("capacity", "")
     capacity = int(cap_raw) if isinstance(cap_raw, str) and cap_raw.isdigit() else None
 
@@ -265,6 +296,7 @@ def _feature_to_row(feature: dict, city_id: str) -> dict | None:
         "capacity":  capacity,
         "geom_json": json.dumps(geom),
         "tags":      json.dumps({k: v for k, v in props.items() if not k.startswith("@")}),
+        **street_addr,
     }
 
 

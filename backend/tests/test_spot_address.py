@@ -91,3 +91,64 @@ def test_spots_in_bbox_is_unchanged(spots):
     assert [d.name for d in cur.description] == [
         "id", "spot_type", "access", "operator", "capacity", "lon", "lat", "report_status", "report_at",
     ]
+
+
+# --- Upsert keeps nearest-rule addresses (SA2) -----------------------------
+
+import json  # noqa: E402
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import import_osm  # noqa: E402
+
+
+def _upsert(cur, city_id, osm_id, **address):
+    row = {
+        "city_id": city_id, "osm_id": osm_id, "osm_type": "node", "spot_type": "lot", "access": None,
+        "operator": None, "capacity": None,
+        "geom_json": json.dumps({"type": "Point", "coordinates": [13.4, 52.5]}), "tags": "{}",
+        "address_street": None, "address_housenumber": None, "address_postcode": None,
+        "address_source": None, "address_distance_m": None, **address,
+    }
+    cur.execute(import_osm._UPSERT_SQL, row)
+
+
+def _stored(cur, osm_id):
+    cur.execute("SELECT address_street, address_housenumber, address_source FROM parking_spots "
+                "WHERE osm_id = %s AND osm_type = 'node'", (osm_id,))
+    return cur.fetchone()
+
+
+@pytest.fixture
+def berlin(write_tx):
+    act_as(write_tx, "admin")
+    write_tx.execute("SELECT id FROM cities WHERE slug = 'berlin'")
+    return write_tx, str(write_tx.fetchone()[0])
+
+
+def test_reimport_without_own_address_keeps_a_nearest_rule_address(berlin):
+    cur, city_id = berlin
+    _upsert(cur, city_id, -920_000_001)
+    cur.execute("UPDATE parking_spots SET address_street = 'Oranienstraße', address_housenumber = '12', "
+                "address_source = 'nearest_address', address_distance_m = 20 WHERE osm_id = -920000001")
+    _upsert(cur, city_id, -920_000_001)  # re-import: still no own address
+    assert _stored(cur, -920_000_001) == ("Oranienstraße", "12", "nearest_address")
+
+
+def test_reimport_with_own_address_replaces_a_nearest_rule_address(berlin):
+    cur, city_id = berlin
+    _upsert(cur, city_id, -920_000_002)
+    cur.execute("UPDATE parking_spots SET address_street = 'Oranienstraße', address_source = 'nearest_street', "
+                "address_distance_m = 30 WHERE osm_id = -920000002")
+    _upsert(cur, city_id, -920_000_002, address_street="Adalbertstraße", address_housenumber="3",
+            address_source="own_tags", address_distance_m=0.0)
+    assert _stored(cur, -920_000_002) == ("Adalbertstraße", "3", "own_tags")
+
+
+def test_reimport_clears_own_tags_that_were_removed_in_osm(berlin):
+    cur, city_id = berlin
+    _upsert(cur, city_id, -920_000_003, address_street="Adalbertstraße", address_source="own_tags",
+            address_distance_m=0.0)
+    _upsert(cur, city_id, -920_000_003)  # tag gone in OSM
+    assert _stored(cur, -920_000_003) == (None, None, None)

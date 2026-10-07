@@ -70,3 +70,54 @@ def test_classification_is_unchanged_for_kept_features():
     assert row["access"] == "paid"
     assert row["capacity"] == 120
     assert row["operator"] == "APCOA"
+
+
+# --- Address rules 1-2 (SPEC-spot-address.md) -----------------------------
+
+ADDRESS_KEYS = ("address_street", "address_housenumber", "address_postcode", "address_source", "address_distance_m")
+
+
+def address(row: dict) -> tuple:
+    return tuple(row[k] for k in ADDRESS_KEYS)
+
+
+def test_own_address_tags_are_used():
+    row = import_osm._feature_to_row(
+        feature("way", {"amenity": "parking", "addr:street": "Oranienstraße", "addr:housenumber": "12",
+                        "addr:postcode": "10997"}), "city")
+    assert address(row) == ("Oranienstraße", "12", "10997", "own_tags", 0.0)
+
+
+def test_own_street_without_number_still_counts():
+    row = import_osm._feature_to_row(feature("node", {"amenity": "parking", "addr:street": "Oranienstraße"}), "city")
+    assert address(row) == ("Oranienstraße", None, None, "own_tags", 0.0)
+
+
+def test_street_parking_way_uses_its_own_name():
+    row = import_osm._feature_to_row(
+        feature("way", {"parking:lane:both": "parallel", "highway": "residential", "name": "Oranienstraße"}, LINE),
+        "city")
+    assert address(row) == ("Oranienstraße", None, None, "street_name", 0.0)
+
+
+def test_own_address_tags_win_over_a_street_name():
+    row = import_osm._feature_to_row(
+        feature("way", {"parking:lane:left": "parallel", "name": "Oranienstraße", "addr:street": "Adalbertstraße",
+                        "addr:housenumber": "3"}, LINE), "city")
+    assert address(row)[:2] == ("Adalbertstraße", "3")
+    assert address(row)[3] == "own_tags"
+
+
+@pytest.mark.parametrize(
+    "tags",
+    [
+        {"amenity": "parking"},
+        {"amenity": "parking", "name": "P+R Ostkreuz"},  # a car park's name is not an address
+        {"amenity": "parking", "addr:housenumber": "12"},  # a number without a street is not usable
+        {"parking:lane:both": "parallel", "highway": "residential"},  # unnamed street
+    ],
+)
+def test_no_own_address_leaves_all_fields_empty(tags):
+    osm_type = "way" if any(k.startswith("parking:lane") for k in tags) else "node"
+    row = import_osm._feature_to_row(feature(osm_type, tags, LINE if osm_type == "way" else POINT), "city")
+    assert address(row) == (None, None, None, None, None)

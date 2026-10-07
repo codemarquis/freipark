@@ -1798,7 +1798,16 @@ Frontend                                                                    │
 
 ### SA2 — Importer: rules 1–2 at row level
 
-- [ ] **SA2: own address tags and street-way name in `_feature_to_row`; upsert writes the columns**
+- [x] **SA2: own address tags and street-way name in `_feature_to_row`; upsert writes the columns — done 2026-10-07, local only.**
+  8 unit tests + 3 upsert DB tests written first (8 + 1 failed; the
+  other 2 upsert tests passed only because the old upsert ignored
+  addresses), then all pass; backend suite 91/91. **Upsert is
+  selective, not a plain overwrite:** it takes the incoming address when
+  the row has its own (rules 1–2), clears an `own_tags`/`street_name`
+  address whose tags vanished from OSM, and otherwise keeps a
+  nearest-rule address for the SA3 step to refresh — so a failed SA3
+  step can't blank addresses. Real run (Cottbus re-import): 270
+  `street_name`, 6 `own_tags`, 2,760 awaiting SA3.
   - Rule 1: `addr:street` (+ `addr:housenumber`, `addr:postcode`) → `own_tags`, distance 0;
     a street without a number still counts
   - Rule 2: `street` spot with `name` → `street_name`, distance 0
