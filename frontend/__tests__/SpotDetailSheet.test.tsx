@@ -37,6 +37,8 @@ const BASE: SpotRow = {
   capacity: null,
   lon: 13.405,
   lat: 52.52,
+  report_status: null,
+  report_at: null,
 };
 
 // @testing-library/react-native v14 made render() async — callers must await.

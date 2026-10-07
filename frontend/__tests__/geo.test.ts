@@ -9,6 +9,8 @@ const SPOT: SpotRow = {
   capacity: null,
   lon: 13.405,
   lat: 52.52,
+  report_status: null,
+  report_at: null,
 };
 
 // ─── boundsToParams ───────────────────────────────────────────────────────────
@@ -79,6 +81,13 @@ describe('spotsToGeoJSON', () => {
     ];
     const result = spotsToGeoJSON(spots);
     expect(result.features.map((f) => f.properties.access)).toEqual(['paid', 'permit', null]);
+  });
+
+  it('carries report_status and report_at into properties', () => {
+    const spot: SpotRow = { ...SPOT, report_status: 'full', report_at: '2026-10-07T11:50:00.123456+00:00' };
+    const { properties } = spotsToGeoJSON([spot]).features[0];
+    expect(properties.report_status).toBe('full');
+    expect(properties.report_at).toBe('2026-10-07T11:50:00.123456+00:00');
   });
 
   it('maps capacity and operator into properties', () => {

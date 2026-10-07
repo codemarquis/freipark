@@ -17,6 +17,8 @@ const SPOT: SpotRow = {
   capacity: null,
   lon: 13.405,
   lat: 52.52,
+  report_status: null,
+  report_at: null,
 };
 
 beforeEach(() => {

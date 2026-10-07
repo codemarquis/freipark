@@ -1354,7 +1354,18 @@ Frontend slice                          ▼
 
 ### R3 — Types and pure helpers
 
-- [ ] **R3: `SpotRow` report fields + `features/reports/reportStatus.ts`**
+- [x] **R3: `SpotRow` report fields + `features/reports/reportStatus.ts` — done 2026-10-07.**
+  `npx tsc --noEmit` clean; `npx jest` → 119/119 across 7 suites
+  (`reportStatus.test.ts` 26 new, `geo.test.ts` +1); `reportStatus.ts` at
+  100% lines / 84% branches. Two additions beyond the task text, both
+  driven by real data shapes: (1) `activeReport()` — the status + age pair
+  R7's sheet needs — accepts *missing* fields, because MapLibre can drop
+  null-valued properties from a tapped feature (`SpotLayer` reads the spot
+  back via `feature.properties as SpotRow`); (2) timestamps are parsed
+  after trimming PostgREST's microseconds to milliseconds, since Hermes's
+  `Date.parse` isn't guaranteed to accept 6 fractional digits. Touched 6
+  files, not 4: the `SpotRow` fixtures in `SpotDetailSheet.test.tsx` and
+  `useSpots.test.ts` also needed the two new fields.
   - `SpotRow` gains `report_status: 'free' | 'full' | null` and `report_at: string | null`
   - `reportStatus.ts`: `ReportStatus`, `ReportErrorCode`, `isActive()`, `ageMinutes()`, `errorCode()`, `maxRadiusFor(spotType)` (150/300 — kept in sync with the SQL by a comment pointing at `007`)
   - Acceptance: `tsc --noEmit` clean (fix any test fixtures that build `SpotRow`s); `isActive` boundary 29:59 → true, 30:00 → false; every RPC message maps; unknown → `'unknown'`; `spotsToGeoJSON` carries both new props (it spreads the row, so this is a test, not a code change)
