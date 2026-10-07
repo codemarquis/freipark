@@ -1423,7 +1423,22 @@ Frontend slice                          ▼
 
 ### R6 — `ReportButtons` + translations
 
-- [ ] **R6: `features/reports/ReportButtons.tsx` and `report.*` keys in all three locales**
+- [x] **R6: `features/reports/ReportButtons.tsx` and `report.*` keys in all three locales — done 2026-10-07.**
+  Tests written first (module-not-found), then 15/15 passing (11 component
+  + 2 locale-parity + 2 parametrised); full suite 156/156 across 10
+  suites; `npx tsc --noEmit` clean; no `any`. 15 `report.*` keys added to
+  `de`/`en`/`tr` (locale files round-tripped byte-for-byte first, so the
+  diff is additions only). German uses formal *Sie* and Turkish the polite
+  form, matching the existing strings. The status-line keys
+  (`statusFree`/`statusFull` + `…Now` for under a minute) are added here
+  for R7 to use.
+  **Deviation from the task text:** `ReportButtons` does **not** render
+  its own `AuthSheet`. It sits inside `SpotDetailSheet` (a gorhom bottom
+  sheet), and a bottom sheet nested there would be confined to the
+  parent sheet's area. It calls `onSignInRequired()` instead; R7 renders
+  the `AuthSheet` at `MapScreen` level, alongside `AccountButton`'s.
+  A `'busy'` outcome (second tap mid-request) does nothing;
+  `not_authenticated` shows no error text.
   - Two buttons (free / full); renders its own `AuthSheet` (same `visible`/`onClose` API that `AccountButton` uses) for signed-out taps and `not_authenticated`; disabled + hint when `locationDenied`; spinner while submitting; inline error text; calls `onReported(report)` on success
   - Keys: button labels, status line ("Reported free · {{n}} min ago"), every error message, location hint — `de`, `en`, `tr` together
   - Acceptance: signed-out tap opens `AuthSheet` and sends nothing; denied → disabled + hint; each error code renders its message; success calls `onReported`; buttons have accessibility labels
@@ -1435,6 +1450,7 @@ Frontend slice                          ▼
 - [ ] **R7: Status line + `ReportButtons` in `SpotDetailSheet`; refetch from `MapScreen`**
   - Status line uses `lastReport` (optimistic) over `spot.report_status` / `report_at`, hidden when inactive; minutes re-render once a minute while the sheet is open
   - `MapScreen` passes `onReported={refetch}` and the existing `locationDenied`
+  - `MapScreen` renders an `AuthSheet` for `onSignInRequired` (see R6's deviation note)
   - Acceptance: active report → line shown; expired or none → hidden; after a successful report the line updates immediately and `refetch` is called once; existing sheet tests unchanged
   - Verify: `npx jest` (whole suite); `npx tsc --noEmit`
   - Files: `frontend/src/features/map/SpotDetailSheet.tsx`, `frontend/src/features/map/MapScreen.tsx`, `frontend/__tests__/SpotDetailSheet.test.tsx`

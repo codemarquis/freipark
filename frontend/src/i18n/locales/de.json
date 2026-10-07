@@ -67,5 +67,22 @@
   },
   "search": {
     "placeholder": "In Deutschland suchen…"
+  },
+  "report": {
+    "prompt": "Gibt es hier freien Platz?",
+    "free": "Platz frei",
+    "full": "Voll",
+    "freeA11y": "Melden: Platz frei",
+    "fullA11y": "Melden: voll",
+    "statusFree": "Als frei gemeldet · vor {{minutes}} Min.",
+    "statusFreeNow": "Als frei gemeldet · gerade eben",
+    "statusFull": "Als voll gemeldet · vor {{minutes}} Min.",
+    "statusFullNow": "Als voll gemeldet · gerade eben",
+    "locationNeeded": "Aktivieren Sie den Standortzugriff, um diesen Platz zu melden.",
+    "errorTooFar": "Sie müssen sich am Parkplatz befinden, um ihn zu melden.",
+    "errorRateLimitedSpot": "Sie haben diesen Platz gerade erst gemeldet.",
+    "errorRateLimitedHourly": "Zu viele Meldungen. Bitte versuchen Sie es später erneut.",
+    "errorLocationUnavailable": "Ihr Standort konnte nicht ermittelt werden.",
+    "errorUnknown": "Die Meldung konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
   }
 }

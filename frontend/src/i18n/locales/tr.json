@@ -67,5 +67,22 @@
   },
   "search": {
     "placeholder": "Almanya'da ara…"
+  },
+  "report": {
+    "prompt": "Burada boş yer var mı?",
+    "free": "Yer boş",
+    "full": "Dolu",
+    "freeA11y": "Bildir: yer boş",
+    "fullA11y": "Bildir: dolu",
+    "statusFree": "Boş bildirildi · {{minutes}} dk önce",
+    "statusFreeNow": "Boş bildirildi · az önce",
+    "statusFull": "Dolu bildirildi · {{minutes}} dk önce",
+    "statusFullNow": "Dolu bildirildi · az önce",
+    "locationNeeded": "Bu yeri bildirmek için konum erişimini etkinleştirin.",
+    "errorTooFar": "Bildirmek için park yerinde olmanız gerekir.",
+    "errorRateLimitedSpot": "Bu yeri az önce bildirdiniz.",
+    "errorRateLimitedHourly": "Çok fazla bildirim. Lütfen daha sonra tekrar deneyin.",
+    "errorLocationUnavailable": "Konumunuz alınamadı.",
+    "errorUnknown": "Bildirim gönderilemedi. Lütfen tekrar deneyin."
   }
 }
