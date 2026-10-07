@@ -1394,7 +1394,26 @@ Frontend slice                          ▼
 
 ### R5 — `useReportSpot` hook
 
-- [ ] **R5: `features/reports/useReportSpot.ts`**
+- [x] **R5: `features/reports/useReportSpot.ts` — done 2026-10-07.**
+  Tests written first (module-not-found), then 16/16 passing; full suite
+  141/141 across 9 suites; `npx tsc --noEmit` clean; `useReportSpot.ts`
+  at 100% lines; no `any`. Design choices beyond the task text:
+  - Signed-in check is `supabase.auth.getSession()` at tap time, not
+    `useAuth()` — each `useAuth()` instance sets up its own auth listener,
+    and the session at tap time is the authoritative answer anyway.
+  - `submit()` returns an outcome (`{ ok: true, report }` or
+    `{ ok: false, error }`) as well as setting state, so R6 can open
+    `AuthSheet` on `not_authenticated` without an effect.
+  - A second tap while one report is in flight returns `'busy'` and is
+    ignored (no state change, no analytics event); guarded by a ref so two
+    taps in the same render see each other.
+  - RPC rows are validated (`status` free/full, `reported_at` string)
+    rather than cast; an empty or malformed response → `unknown`.
+  - Location: Balanced accuracy raced against a 10 s timeout; any failure
+    → `location_unavailable` with no RPC call.
+  - Analytics: `spot_report_submitted { report_status, parking_spot_type,
+    parking_access }` and `spot_report_failed { reason }` only — a test
+    asserts the exact property set.
   - `submit(spot, status)`: if no session → returns `'not_authenticated'` without calling anything; otherwise fresh `Location.getCurrentPositionAsync` (Balanced, 10 s timeout via `Promise.race`) → `supabase.rpc('report_spot', …)` → typed result or `ReportErrorCode`
   - State: `submitting`, `error: ReportErrorCode | null`, `lastReport: { status, reported_at } | null`
   - PostHog `spot_report_submitted` / `spot_report_failed` with only the spec's allowed properties
