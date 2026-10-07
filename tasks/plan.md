@@ -1536,7 +1536,22 @@ Frontend slice                          ▼
 
 ### R8 — Retention job
 
-- [ ] **R8: `supabase/self-host/purge_spot_reports.sh`**
+- [x] **R8: `supabase/self-host/purge_spot_reports.sh` — done 2026-10-07, local only; cron NOT installed on the OVH box (ask first).**
+  **Design change, spec updated first:** the DELETE lives in a
+  `purge_spot_reports(retention_days int)` function added to migration
+  `007` (not yet on production, so still editable): rejects < 1, returns
+  the row count, `EXECUTE` revoked from `public`/`anon`/`authenticated`.
+  The script validates `FREIPARK_REPORT_RETENTION_DAYS` (whole number ≥ 1;
+  `0` and `30; DROP TABLE x` both refused with exit 1 before touching the
+  DB) and calls the function as `supabase_admin`. `FREIPARK_DOCKER`
+  defaults to `sudo docker` like `backup_db.sh`; `docker` locally.
+  Tests: 5 new DB tests written first (all failed: function missing),
+  then `FREIPARK_DB_WRITE_TESTS=1 pytest` → 39/39. Script run on the local
+  stack with committed seed data: 31-day and 1-day reports → 1 deleted,
+  the 1-day one kept; seed user removed afterwards (0 reports, 1 user).
+  **Found while reading `backup_db.sh`:** the nightly backup dumps only
+  `cities`, `parking_spots`, `auth.users`, `auth.identities` — once `007`
+  is live, `spot_reports` is **not backed up**. Added to R10 as a decision.
   - Deletes `spot_reports` rows with `reported_at < now() - interval '30 days'`; logs the row count; same `docker compose exec db psql` pattern as `backup_db.sh`
   - Acceptance: run on the local stack with seeded 31-day-old and 1-day-old rows → only the old ones go
   - Verify: run it locally, check counts before and after
@@ -1556,6 +1571,11 @@ Frontend slice                          ▼
 
 - [ ] **R10: Apply `007` to production, release the app, verify live**
   - **Ask first** before each production step
+  - **Decide first:** add `-t public.spot_reports` to `backup_db.sh`, or
+    accept that reports (short-lived by design) aren't backed up. If added,
+    the restore order still works: `pg_dump --data-only` orders by FKs and
+    `auth.users` is in the same dump.
+  - Install the R8 cron entry (`30 3 * * *`, after the backup) — ask first.
   - Order: (1) fresh `backup_db.sh` run; (2) apply `007` on the OVH box as `supabase_admin`; (3) confirm the *current* app still loads spots (old build, new RPC); (4) `EXPLAIN ANALYZE` p95 on prod vs the R2 baseline; (5) app release with the new UI; (6) live checks for spec criteria 4–7, including one real report from a real location
   - Rollback: `DROP FUNCTION` + recreate `002`'s `spots_in_bbox`, `DROP FUNCTION report_spot`, `DROP TABLE spot_reports` — written out and kept in this task's notes *before* step 2
   - Acceptance: spec § Success Criteria 1–10 all checked in `SPEC-spot-reports.md`

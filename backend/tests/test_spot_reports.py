@@ -309,3 +309,34 @@ def test_report_lookup_uses_the_spot_latest_index(world):
     )
     plan = "\n".join(row[0] for row in cur.fetchall())
     assert "idx_spot_reports_spot_latest" in plan, plan
+
+
+# --- Retention: purge_spot_reports ----------------------------------------
+
+
+def test_purge_deletes_only_reports_older_than_the_retention_window(world):
+    cur = world["cur"]
+    add_report(cur, world, "street", "free", minutes_ago=31 * 24 * 60)  # 31 days
+    add_report(cur, world, "lot", "full", minutes_ago=29 * 24 * 60)     # 29 days
+    add_report(cur, world, "lot", "free", minutes_ago=5)
+
+    act_as(cur, "admin")
+    cur.execute("SELECT purge_spot_reports(30)")
+    assert cur.fetchone()[0] == 1
+
+    cur.execute("SELECT count(*) FROM spot_reports WHERE user_id = %s", (world["user_id"],))
+    assert cur.fetchone()[0] == 2
+
+
+@pytest.mark.parametrize("days", [0, -1])
+def test_purge_rejects_a_retention_below_one_day(world, days):
+    cur = world["cur"]
+    act_as(cur, "admin")
+    expect_error(cur, "SELECT purge_spot_reports(%s)", (days,), "retention_days must be >= 1")
+
+
+@pytest.mark.parametrize("role", ["anon", "authenticated"])
+def test_clients_cannot_purge(world, role):
+    cur = world["cur"]
+    act_as(cur, role, world["user_id"] if role == "authenticated" else None)
+    expect_error(cur, "SELECT purge_spot_reports(30)", (), "permission denied")

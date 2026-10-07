@@ -181,7 +181,8 @@ LIMIT 1)` — both conditions are covered by `idx_spot_reports_spot_latest`.
 ## Project Structure
 
 ```
-supabase/migrations/007_spot_reports.sql        # table, indexes, RLS, report_spot, spots_in_bbox v2
+supabase/migrations/007_spot_reports.sql        # table, indexes, RLS, report_spot, spots_in_bbox v2, purge_spot_reports
+supabase/self-host/purge_spot_reports.sh        # daily retention job (calls purge_spot_reports)
 backend/tests/test_spot_reports.py              # DB-level tests (rollback-only)
 
 frontend/src/features/reports/
@@ -389,7 +390,7 @@ Cases:
 | Question | Status |
 |---|---|
 | Is the "small active user base" precondition met, and is updating `CLAUDE.md`'s "no real-time availability" MVP rule approved? | **Resolved 2026-10-07: approved** — see the scope note at the top. |
-| Retention of expired reports | **Accepted 2026-10-07 (default approved with the spec):** delete rows older than 30 days via a daily `psql` job on the OVH box, next to the existing `backup_db.sh` cron (`pg_cron` isn't confirmed enabled in the self-hosted image). Expired-but-retained rows are useful for tuning the 30-min TTL later. |
+| Retention of expired reports | **Accepted 2026-10-07 (default approved with the spec):** delete rows older than 30 days via a daily job on the OVH box, next to the existing `backup_db.sh` cron (`pg_cron` isn't confirmed enabled in the self-hosted image). Expired-but-retained rows are useful for tuning the 30-min TTL later. **As built (R8):** the DELETE lives in a `purge_spot_reports(retention_days int)` function in migration `007` (no client role may execute it; rejects values < 1; returns the row count), called by `supabase/self-host/purge_spot_reports.sh` — so the SQL is covered by the DB tests rather than living only in a shell script. |
 | Large lots/zones: centroid can be > 150 m from where the reporter stands | **Resolved 2026-10-07:** 150 m for `street`, 300 m for `lot`/`garage`/`zone`. Watch `too_far` failures in PostHog to tune. |
 | Conflicting reports (free at 10:00, full at 10:02) | Latest wins (decided). Revisit with "2 of 3 say free" only if users complain. |
 | Ring colours (teal / near-black) | Placeholder — needs a quick visual check on device against the existing fills and the dark basemap. |

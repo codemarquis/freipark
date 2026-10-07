@@ -176,4 +176,30 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.spots_in_bbox(float8, float8, float8, float8, int) FROM public;
 GRANT  EXECUTE ON FUNCTION public.spots_in_bbox(float8, float8, float8, float8, int) TO anon, authenticated;
 
+-- Retention: reports older than retention_days are deleted by a daily job
+-- (supabase/self-host/purge_spot_reports.sh, run as supabase_admin). Kept
+-- as a function so the DELETE is covered by the DB tests. Returns the
+-- number of rows deleted.
+CREATE OR REPLACE FUNCTION public.purge_spot_reports(retention_days int)
+RETURNS bigint
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_deleted bigint;
+BEGIN
+  IF retention_days IS NULL OR retention_days < 1 THEN
+    RAISE EXCEPTION USING MESSAGE = 'retention_days must be >= 1';
+  END IF;
+  DELETE FROM spot_reports
+   WHERE reported_at < now() - make_interval(days => retention_days);
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN v_deleted;
+END;
+$$;
+
+-- Maintenance only: no client role may call it (Supabase's default
+-- privileges would otherwise grant EXECUTE to anon/authenticated).
+REVOKE EXECUTE ON FUNCTION public.purge_spot_reports(int) FROM public, anon, authenticated;
+
 COMMIT;
