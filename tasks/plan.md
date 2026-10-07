@@ -1477,7 +1477,57 @@ Frontend slice                          ▼
 
 ### Checkpoint C1 — local end-to-end
 
-- [ ] **C1: Simulator against the *local* self-hosted stack (`frontend/.env.staging`-style config pointing at localhost Kong)**
+- [x] **C1: Simulator against the *local* self-hosted stack — done 2026-10-07, with two open findings (ring contrast, no Berlin street spots).**
+  **Setup:** `frontend/c1.env` (gitignored by the root `*.env` rule; not
+  auto-loaded) = `frontend/.env` with only `EXPO_PUBLIC_SUPABASE_URL`
+  switched to `http://localhost:8000`. Use:
+  `cd frontend && set -a && . ./c1.env && set +a && npx expo start --dev-client`.
+  Confirmed the served iOS bundle contains `http://localhost:8000` once and
+  `supabase.freipark.com` zero times. Gotcha: first named it
+  `.env.c1.local` — Expo's env handling picked the `.env*` file up and
+  Metro failed with a TransformError trying to compile it; renamed.
+  Ran the Oct 1 Debug simulator build from DerivedData (R3–R7 are JS-only,
+  no rebuild needed) on an iPhone 17 Pro sim, driven with `idb`.
+  **HTTP layer first** (curl through local Kong with a throwaway local
+  user + locally minted JWT): lot 350 m → `too_far`; lot 200 m → ok;
+  repeat → `rate_limited_spot`; street 200 m → `too_far`; street 100 m → ok;
+  anon `spots_in_bbox` returns the report. Error bodies are
+  `{"code":"P0001","message":"too_far"}` — exactly what `errorCode()` maps;
+  success rows carry microsecond timestamps (R3's parser handles them).
+  Anon `report_spot` → `42501 permission denied`.
+  **In the app** (screenshots kept in the job's tmp dir):
+  - Sheet at the 35% snap point fits type, access, report status, route,
+    capacity, prompt and both buttons — no snap-point change needed.
+  - Signed out → "Space free" opens `AuthSheet` on top of the spot sheet;
+    0 reports written.
+  - Signed in (local-only test user `c1-tester@example.invalid`) → report
+    stored (`free`, 26.8 m from the lot), sheet shows "Reported free · just
+    now", marker gains the ring after the refetch.
+  - Same spot again → "You reported this spot a moment ago."; still 1 row.
+  - Sim location moved ~400 m → "You need to be at the spot to report it."
+    — the fresh location fix was used (blue dot moved); still 1 row.
+  - "Second device sees it" covered by the anon HTTP read above rather
+    than a second simulator.
+  **Not exercised in the UI:** typing credentials into `AuthSheet`. `idb`
+  can't type `@` and the paste menu never offered Paste (same tooling
+  limit as the auth module). Signed in by fetching a real session from
+  local GoTrue (`grant_type=password`) and writing it into the app's
+  AsyncStorage (`sb-localhost-auth-token`, stored as an MD5-named file
+  because it's > 1 KB) — real session, only the typing skipped.
+  **Findings to decide on:**
+  1. **Ring contrast:** teal (`#14b8a6`) ring on a green "free access"
+     fill (`#22c55e`) reads as a slightly bigger green dot at normal zoom.
+     Clear on blue/amber/red/grey fills. Needs a colour decision.
+  2. **Central Berlin has no `street` spots** in the imported data (24,378
+     lots, 624 garages; all 9,635 street spots are in other cities), so in
+     Berlin the 300 m radius is the one that applies in practice.
+  3. `Simulator.app` is missing from this Xcode install (sims boot
+     headless only) — fine for `idb`-driven checks, but there's no window
+     for manual testing until it's reinstalled.
+  **Cleanup:** test user deleted (its report cascaded): 0 reports, 1 user —
+  same as before C1. Injected session removed from the sim app; Metro
+  stopped; simulator shut down; temp password/session files deleted.
+  Coverage: `features/reports/` 100% lines (R3/R5).
   - Street spot, simulator location within 150 m → report free → ring + status line; a second simulator or device (signed out) sees it after panning
   - Lot from 200 m → accepted; street from 200 m → "You need to be at the spot"
   - Same spot twice within 5 min → rate-limit message
