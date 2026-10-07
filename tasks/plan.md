@@ -1236,3 +1236,165 @@ Success Criteria exactly — see that section for the authoritative list.
 migrated, but sign-in has only been verified with a throwaway account
 (SS8), not the pre-existing migrated one. SS11's rollback window
 (~2026-10-11) is tracked separately above.
+
+---
+
+# Implementation Plan: spot-reports module
+
+**Spec:** [SPEC-spot-reports.md](../SPEC-spot-reports.md) (approved 2026-10-07)
+**Module:** `spot-reports`
+**Build position:** Fourth — depends on `infra` (schema, self-hosted stack), `map` (`spots_in_bbox`, `SpotLayer`, `SpotDetailSheet`) and `auth` (`useAuth`, `AuthSheet`).
+
+> **Status (2026-10-07):** planned, nothing built. Every task below is
+> unchecked.
+
+---
+
+## Dependency Graph
+
+```
+DB slice (local stack only)
+[R1] table + report_spot ──→ [R2] spots_in_bbox v2 (+ latency baseline)
+                                        │
+Frontend slice                          ▼
+[R3] types + reportStatus helpers ──→ [R4] marker ring + refetch
+        │
+        └──→ [R5] useReportSpot ──→ [R6] ReportButtons + i18n ──→ [R7] wire into SpotDetailSheet
+                                                                         │
+                                         ── Checkpoint C1: local end-to-end ──
+                                                                         │
+[R8] retention job ─┐                                                    │
+[R9] docs ──────────┴──────────────────────────────────────────→ [R10] production rollout (ask first)
+```
+
+- R1→R2 are sequential (same migration file, R2 reads the table R1 creates).
+- R3 only needs the *agreed shape* of R2's columns, not a running DB, so
+  the frontend slice can start in parallel with R2.
+- R8 and R9 are independent of each other and of R3–R7.
+- R10 is the only task that touches production; it waits for everything.
+
+---
+
+## Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| DB tests write to **production** — `backend/.env`'s `DATABASE_URL` has pointed at prod since 2026-09-27 | High if forgotten | R1 adds a guard fixture that skips on prod hosts, and every test runs in a rolled-back transaction. Always pass an explicit local `DATABASE_URL` |
+| `spots_in_bbox` return-type change breaks the live app between migration and app release | Medium | `DROP` + `CREATE` + re-`GRANT` in one transaction; existing columns/args unchanged, so old app builds ignore the extra fields. R2 has a test that asserts the old columns still come back for `anon` |
+| `SECURITY DEFINER` functions with a mutable `search_path` (privilege-escalation footgun) | Medium | Both functions `SET search_path = public` (plus `pg_temp` last); R1/R2 test that `anon` can't execute `report_spot` |
+| Lateral join slows the hottest query in the app | Medium | Baseline measured *before* R2 changes anything; acceptance is p95 within +20% (spec criterion 8) |
+| Simulating `auth.uid()` in pytest | Low | Same mechanism PostgREST uses: `SET LOCAL ROLE authenticated` + `set_config('request.jwt.claims', …, true)` |
+| `@testing-library/react-native` async pitfalls (hit in the map and auth modules) | Low — known | `await render()` / `renderHook()` from the start; fake timers only with `advanceTimersByTimeAsync` |
+| Simulator can't type `@` (blocked the auth device checks) | Medium | R7's manual pass uses an account that's already signed in, or pastes credentials |
+
+---
+
+## Tasks
+
+### R1 — `spot_reports` table and `report_spot` RPC
+
+- [ ] **R1: Write the first half of `supabase/migrations/007_spot_reports.sql` and its DB tests**
+  - Table, both indexes, RLS on with **no** client policies (spec § Data Model)
+  - `report_spot(p_spot_id, p_status, p_lon, p_lat)`: `SECURITY DEFINER`, `SET search_path = public, pg_temp`, the six checks in spec order, radius 150 m for `street` and 300 m otherwise; `GRANT EXECUTE … TO authenticated`, `REVOKE … FROM anon, public`
+  - `conftest.py`: prod-host guard (skip unless `ALLOW_PROD_DB_TESTS=1`), a rolled-back `tx` fixture, and an `as_user(uuid)` helper that sets role + JWT claims
+  - Acceptance: migration applies cleanly on top of `001`–`006` on the local stack; tests cover anon denied (table + RPC), authenticated direct-table access denied, happy path, `expires_at = reported_at + 30 min`, every error code, radius by type (street 200 m → `too_far`; lot 200 m → ok; lot 350 m → `too_far`), cascade on user delete
+  - Verify: `DATABASE_URL=<local> pytest tests/test_spot_reports.py -v` — all pass; the existing `test_db.py` still passes; a run with prod `DATABASE_URL` **skips**
+  - Files: `supabase/migrations/007_spot_reports.sql`, `backend/tests/conftest.py`, `backend/tests/test_spot_reports.py`
+
+### R2 — `spots_in_bbox` v2
+
+- [ ] **R2: Extend `spots_in_bbox` with `report_status` / `report_at`**
+  - **First**, on the local stack *before* changing anything: run the Berlin-bbox `spots_in_bbox` call through `EXPLAIN (ANALYZE)` 10× and record p50/p95 in this task's notes as the baseline
+  - Then in `007`: `DROP FUNCTION` + `CREATE` with the same args/defaults and two new nullable columns via `LEFT JOIN LATERAL` (latest unexpired report); `SECURITY DEFINER`, `SET search_path = public, pg_temp`; re-`GRANT EXECUTE … TO anon, authenticated`; all in the migration's single transaction
+  - Acceptance: active report returned; `NULL` once backdated 31 min; latest of two wins; no `user_id` column in output; `anon` can still call it and gets the original seven columns unchanged; plan uses `idx_spot_reports_spot_latest`; p95 within +20% of baseline with ~1,000 synthetic reports seeded in the bbox (rolled back afterwards)
+  - Verify: `pytest tests/test_spot_reports.py -v`; baseline and after numbers written here
+  - Files: `supabase/migrations/007_spot_reports.sql`, `backend/tests/test_spot_reports.py`
+
+### R3 — Types and pure helpers
+
+- [ ] **R3: `SpotRow` report fields + `features/reports/reportStatus.ts`**
+  - `SpotRow` gains `report_status: 'free' | 'full' | null` and `report_at: string | null`
+  - `reportStatus.ts`: `ReportStatus`, `ReportErrorCode`, `isActive()`, `ageMinutes()`, `errorCode()`, `maxRadiusFor(spotType)` (150/300 — kept in sync with the SQL by a comment pointing at `007`)
+  - Acceptance: `tsc --noEmit` clean (fix any test fixtures that build `SpotRow`s); `isActive` boundary 29:59 → true, 30:00 → false; every RPC message maps; unknown → `'unknown'`; `spotsToGeoJSON` carries both new props (it spreads the row, so this is a test, not a code change)
+  - Verify: `npx jest reportStatus geo`; `npx tsc --noEmit`
+  - Files: `frontend/src/lib/types.ts`, `frontend/src/features/reports/reportStatus.ts`, `frontend/__tests__/reportStatus.test.ts`, `frontend/__tests__/geo.test.ts`
+
+### R4 — Marker ring and refetch
+
+- [ ] **R4: Ring paint in `SpotLayer`; `refetch()` from `useSpots`**
+  - `spots-unclustered` gets data-driven `circle-stroke-color` / `circle-stroke-width` from `report_status` (spec § Map markers); fill expression untouched
+  - `useSpots` remembers the last bbox and returns `refetch()`, which reuses `fetchBbox` (so the stale-response guard still applies)
+  - Acceptance: no report → identical paint to today; `refetch()` re-requests the last bbox, or `BERLIN_INITIAL` before any pan
+  - Verify: `npx jest useSpots` (new refetch cases); visual check deferred to C1
+  - Files: `frontend/src/features/map/SpotLayer.tsx`, `frontend/src/features/map/useSpots.ts`, `frontend/__tests__/useSpots.test.ts`
+
+### R5 — `useReportSpot` hook
+
+- [ ] **R5: `features/reports/useReportSpot.ts`**
+  - `submit(spot, status)`: if no session → returns `'not_authenticated'` without calling anything; otherwise fresh `Location.getCurrentPositionAsync` (Balanced, 10 s timeout via `Promise.race`) → `supabase.rpc('report_spot', …)` → typed result or `ReportErrorCode`
+  - State: `submitting`, `error: ReportErrorCode | null`, `lastReport: { status, reported_at } | null`
+  - PostHog `spot_report_submitted` / `spot_report_failed` with only the spec's allowed properties
+  - Acceptance: sends the *fresh* coordinates (not `MapScreen`'s mount-time ones); each RPC error maps; location timeout or rejection → `location_unavailable`; no RPC when signed out; no `any`
+  - Verify: `npx jest useReportSpot` (mock `supabase.rpc`, `expo-location`, `posthog`)
+  - Files: `frontend/src/features/reports/useReportSpot.ts`, `frontend/__tests__/useReportSpot.test.ts`
+
+### R6 — `ReportButtons` + translations
+
+- [ ] **R6: `features/reports/ReportButtons.tsx` and `report.*` keys in all three locales**
+  - Two buttons (free / full); renders its own `AuthSheet` (same `visible`/`onClose` API that `AccountButton` uses) for signed-out taps and `not_authenticated`; disabled + hint when `locationDenied`; spinner while submitting; inline error text; calls `onReported(report)` on success
+  - Keys: button labels, status line ("Reported free · {{n}} min ago"), every error message, location hint — `de`, `en`, `tr` together
+  - Acceptance: signed-out tap opens `AuthSheet` and sends nothing; denied → disabled + hint; each error code renders its message; success calls `onReported`; buttons have accessibility labels
+  - Verify: `npx jest ReportButtons`; a key-parity check that all three locale files have the same `report.*` keys
+  - Files: `frontend/src/features/reports/ReportButtons.tsx`, `frontend/src/i18n/locales/de.json`, `frontend/src/i18n/locales/en.json`, `frontend/src/i18n/locales/tr.json`, `frontend/__tests__/ReportButtons.test.tsx`
+
+### R7 — Wire into the detail sheet
+
+- [ ] **R7: Status line + `ReportButtons` in `SpotDetailSheet`; refetch from `MapScreen`**
+  - Status line uses `lastReport` (optimistic) over `spot.report_status` / `report_at`, hidden when inactive; minutes re-render once a minute while the sheet is open
+  - `MapScreen` passes `onReported={refetch}` and the existing `locationDenied`
+  - Acceptance: active report → line shown; expired or none → hidden; after a successful report the line updates immediately and `refetch` is called once; existing sheet tests unchanged
+  - Verify: `npx jest` (whole suite); `npx tsc --noEmit`
+  - Files: `frontend/src/features/map/SpotDetailSheet.tsx`, `frontend/src/features/map/MapScreen.tsx`, `frontend/__tests__/SpotDetailSheet.test.tsx`
+
+### Checkpoint C1 — local end-to-end
+
+- [ ] **C1: Simulator against the *local* self-hosted stack (`frontend/.env.staging`-style config pointing at localhost Kong)**
+  - Street spot, simulator location within 150 m → report free → ring + status line; a second simulator or device (signed out) sees it after panning
+  - Lot from 200 m → accepted; street from 200 m → "You need to be at the spot"
+  - Same spot twice within 5 min → rate-limit message
+  - Ring colours checked against the fills and the basemap — change them here if needed (spec open question)
+  - Coverage: `npx jest --coverage` → `features/reports/` ≥ 80% lines
+
+### R8 — Retention job
+
+- [ ] **R8: `supabase/self-host/purge_spot_reports.sh`**
+  - Deletes `spot_reports` rows with `reported_at < now() - interval '30 days'`; logs the row count; same `docker compose exec db psql` pattern as `backup_db.sh`
+  - Acceptance: run on the local stack with seeded 31-day-old and 1-day-old rows → only the old ones go
+  - Verify: run it locally, check counts before and after
+  - **Ask first:** installing the cron entry on the OVH box (proposed `30 3 * * *`, after the 03:00 backup)
+  - Files: `supabase/self-host/purge_spot_reports.sh`
+
+### R9 — Docs that ship with the feature
+
+- [ ] **R9: `PRIVACY_POLICY.md`, `CLAUDE.md`, `SPEC-infra.md`**
+  - Privacy policy: new "Spot reports" section — what's stored (account id, spot, status, time, distance; **not** coordinates), why, 30-day retention, deleted with the account
+  - `CLAUDE.md`: MVP-scope line no longer says "no real-time availability"; it describes crowdsourced reports instead; module order gains `spot-reports`
+  - `SPEC-infra.md` § Phase 2: pointer to `SPEC-spot-reports.md` as the authoritative version
+  - Acceptance: a reader of any one of the three isn't misled about what the app does
+  - Files: `PRIVACY_POLICY.md`, `CLAUDE.md`, `SPEC-infra.md`
+
+### R10 — Production rollout (ask first)
+
+- [ ] **R10: Apply `007` to production, release the app, verify live**
+  - **Ask first** before each production step
+  - Order: (1) fresh `backup_db.sh` run; (2) apply `007` on the OVH box as `supabase_admin`; (3) confirm the *current* app still loads spots (old build, new RPC); (4) `EXPLAIN ANALYZE` p95 on prod vs the R2 baseline; (5) app release with the new UI; (6) live checks for spec criteria 4–7, including one real report from a real location
+  - Rollback: `DROP FUNCTION` + recreate `002`'s `spots_in_bbox`, `DROP FUNCTION report_spot`, `DROP TABLE spot_reports` — written out and kept in this task's notes *before* step 2
+  - Acceptance: spec § Success Criteria 1–10 all checked in `SPEC-spot-reports.md`
+  - Files: none in the repo besides checkbox and notes updates in this file and the spec
+
+---
+
+## Completion Checklist
+
+Mirrors `SPEC-spot-reports.md` § Success Criteria — see that section for
+the authoritative list. Nothing checked yet.
