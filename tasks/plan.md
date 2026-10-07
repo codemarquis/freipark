@@ -1624,6 +1624,32 @@ Frontend slice                          ▼
     SECURITY DEFINER, anon API call returns the original 7 columns;
     re-running the rollback is a no-op; re-applying 007 restores
     everything; backend suite 39/39 afterwards.
+  - [x] **Step 2 — server checkout updated (2026-10-07).** The server
+    was on `d156bce`: 56 commits with old pre-rewrite hashes (history was
+    force-pushed in an earlier session) and an untracked older
+    `README.md` that would have blocked the pull. `git cherry` showed 0
+    server commits without an equivalent on origin, so: branch
+    `pre-r10-server-head` kept at the old HEAD, `README.md` renamed to
+    `README.server-untracked.md`, `git reset --hard origin/main`. No
+    change to compose/Caddy/Kong/backend app code → no restarts.
+  - [x] **Step 3 — 007 applied to production.** Pre-check: PostGIS in
+    `public`, `extensions` exists, Postgres 15.14, no 007 objects, 33 /
+    424,911 / 4 users. Applied as `supabase_admin` in one transaction
+    (all expected statements, `COMMIT`), then `NOTIFY pgrst, 'reload
+    schema'`.
+  - [x] **Step 4 — existing app builds unaffected.** Public API checks
+    from outside: anon `spots_in_bbox` HTTP 200, 2,000 rows, original 7
+    columns + `report_status`/`report_at`; anon `report_spot`, direct
+    `spot_reports` read and anon `purge_spot_reports` all `42501`; backend
+    `/health/db` ok.
+  - [x] **Step 5 — latency on production** (same 3×200-call anon
+    benchmark, before vs after): p50 3.4 → 3.55 ms, p95 ~100 → ~5 ms —
+    criterion (p95 within +20%) met; the old ~100 ms outliers are gone, as
+    in the local R2 runs.
+  - [x] **Step 6 — purge cron installed.** Script run once by hand on the
+    server (0 deleted). `ubuntu` crontab now has
+    `30 3 * * * …/purge_spot_reports.sh >> ~/freipark-purge.log 2>&1`
+    under the 03:00 backup line (root crontab is empty).
   - Order: (1) fresh `backup_db.sh` run; (2) apply `007` on the OVH box as `supabase_admin`; (3) confirm the *current* app still loads spots (old build, new RPC); (4) `EXPLAIN ANALYZE` p95 on prod vs the R2 baseline; (5) app release with the new UI; (6) live checks for spec criteria 4–7, including one real report from a real location
   - Rollback: `DROP FUNCTION` + recreate `002`'s `spots_in_bbox`, `DROP FUNCTION report_spot`, `DROP TABLE spot_reports` — written out and kept in this task's notes *before* step 2
   - Acceptance: spec § Success Criteria 1–10 all checked in `SPEC-spot-reports.md`
