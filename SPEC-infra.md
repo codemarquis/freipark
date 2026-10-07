@@ -342,10 +342,34 @@ python backend/scripts/import_osm.py --city berlin
 **What the script does:**
 1. Reads the `cities` row for `slug = 'berlin'` to get `geofabrik_url` and `bbox`
 2. Downloads the PBF from `geofabrik_url` if not already cached
-3. Runs `osmium tags-filter` to extract parking-related features (`amenity=parking`, `parking=*`, `parking:lane=*`)
+3. Runs `osmium tags-filter` to extract parking-related features (`amenity=parking`, `amenity=parking_space`, `parking:lane:left/right/both` on ways — see `_FILTERS`; the original `parking=*` was never implemented)
 4. Optionally clips to `bbox` using `osmium extract --bbox`
 5. Imports via `COPY` into a staging table, then upserts into `parking_spots` on conflict `(osm_id, osm_type)`
 6. Logs row count delta (inserted / updated / unchanged)
+
+**Which features become spots (fixed 2026-10-07, migration `009`):**
+`osmium tags-filter` keeps the matching objects *and every object they
+reference* (it needs a way's nodes to build its geometry), and `osmium
+export` then emits any referenced node that carries tags of its own as a
+separate feature. Before this fix those all became "spots": ~34,000 rows
+(~6%) that were barriers, crossings, kerbs, garage entrances/exits,
+charging stations, waste baskets, bike racks, ATMs, etc. — nodes on the
+outline of a car park or along a street-parking way — plus ~1,200 member
+ways of multipolygon car parks (the relation itself is already a row).
+
+A feature becomes a row **only if it matches the filter itself**, mirroring
+`_FILTERS` exactly:
+
+| Feature | Kept |
+|---|---|
+| any node/way/relation with `amenity=parking` or `amenity=parking_space` | yes |
+| a **way** with any `parking:lane:left/right/both` tag | yes |
+| everything else (incl. `amenity=parking_entrance` / `parking_exit` — the car park they belong to is already a row) | no — counted as skipped |
+
+The same rule is applied once in SQL by migration
+`009_remove_non_parking_rows.sql` to delete rows imported before the fix
+(re-imports only insert/update, they never delete). Spot reports on a
+deleted row go with it (`ON DELETE CASCADE`).
 
 Adding a new city: insert a row into `cities` with the Geofabrik URL, then run the script with the new slug. No code changes needed.
 

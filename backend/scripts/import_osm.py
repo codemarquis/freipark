@@ -221,6 +221,23 @@ def _access(props: dict) -> str | None:
     return None
 
 
+_CAR_PARKING_AMENITIES = ("parking", "parking_space")
+_PARKING_LANE_TAGS = ("parking:lane:left", "parking:lane:right", "parking:lane:both")
+
+
+def _is_parking_feature(osm_type: str, props: dict) -> bool:
+    """True only for features that match _FILTERS themselves.
+
+    osmium tags-filter also keeps every object the matches reference (a way
+    needs its nodes), and osmium export emits any of those that has its own
+    tags: barriers, crossings, garage entrances, charging stations, bins…
+    Those are not parking spots. See SPEC-infra.md § OSM Import Pipeline.
+    """
+    if props.get("amenity") in _CAR_PARKING_AMENITIES:
+        return True
+    return osm_type == "way" and any(tag in props for tag in _PARKING_LANE_TAGS)
+
+
 def _feature_to_row(feature: dict, city_id: str) -> dict | None:
     props = feature.get("properties") or {}
     geom  = feature.get("geometry")
@@ -230,6 +247,8 @@ def _feature_to_row(feature: dict, city_id: str) -> dict | None:
     osm_type = props.get("@type", "")
     osm_id_raw = props.get("@id")
     if osm_type not in ("node", "way", "relation") or osm_id_raw is None:
+        return None
+    if not _is_parking_feature(osm_type, props):
         return None
     osm_id = int(osm_id_raw)
 

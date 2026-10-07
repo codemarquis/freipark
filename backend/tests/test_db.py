@@ -48,3 +48,20 @@ def test_rls_blocks_anon_insert(db_conn):
         """)
         count = cur.fetchone()[0]
         assert count == 0, f"Unexpected INSERT/ALL policy grants anon write access ({count} found)"
+
+
+def test_every_spot_is_car_parking(db_conn):
+    """Mirrors import_osm._is_parking_feature (SPEC-infra.md § OSM Import
+    Pipeline): nodes the osmium filter only pulled in as references —
+    barriers, crossings, garage entrances, charging stations — must not be
+    spots. coalesce() matters: NULL IN (...) is NULL, not false."""
+    with db_conn.cursor() as cur:
+        cur.execute("""
+            SELECT count(*) FROM parking_spots
+            WHERE NOT (
+                coalesce(tags->>'amenity', '') IN ('parking', 'parking_space')
+                OR (osm_type = 'way'
+                    AND tags ?| array['parking:lane:left', 'parking:lane:right', 'parking:lane:both'])
+            )
+        """)
+        assert cur.fetchone()[0] == 0

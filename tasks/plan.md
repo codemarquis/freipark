@@ -1704,3 +1704,30 @@ omitted, already covered by the Bremen state extract).
   Altmarkt. Server checkout still at `0b69eda` — `git pull` there to get
   `008` and `rollback_008_cities.sql` (the transfer itself was piped from
   the Mac).
+
+---
+
+# Import filter fix: non-car-parking rows (2026-10-07)
+
+**Spec:** [SPEC-infra.md](../SPEC-infra.md) § OSM Import Pipeline → Which
+features become spots.
+
+- [x] **Root cause:** `osmium tags-filter` keeps objects the matches
+  reference; `osmium export` emits tagged referenced nodes as features;
+  `_feature_to_row` accepted everything. ~34k rows (5.9%) were barriers,
+  crossings, kerbs, garage entrances/exits, charging stations, bins, bike
+  racks, multipolygon member ways — far more than the 587 first noticed
+  (most have no `amenity` tag at all).
+- [x] **Importer:** `_is_parking_feature` keeps only features matching
+  `_FILTERS` themselves. `test_import_osm.py` (31 unit tests, no DB):
+  21 skip cases failed before, all pass after.
+- [x] **Migration `009_remove_non_parking_rows.sql`:** same rule in SQL.
+  Caught in the dry-run preview: `NULL IN (...)` is NULL, so the first
+  draft would have silently kept the 28,712 rows with no `amenity` —
+  fixed with `coalesce`. Local: `DELETE 34184` (12,604 street ways
+  kept), second run `DELETE 0`; 547,590 spots left. New read-only
+  `test_every_spot_is_car_parking` failed with 34184, passes after.
+  Backend suite 74/74. Re-importing Cottbus with the fixed importer:
+  305 skipped, 0 inserted, rule still holds (3,327 → 3,036 real spots).
+- [ ] **Production:** apply `009` (ask first). Then `/health/db` should
+  show 547,590 spots.
