@@ -1667,5 +1667,14 @@ omitted, already covered by the Bremen state extract).
   staged 156,863, inserted 156,863, ended 80 / 581,774; rolled back.
 - [x] **Rollback** `supabase/self-host/rollback_008_cities.sql` rehearsed
   the same way → 33 cities / 424,911 spots; rolled back.
-- [ ] **Production:** backup, then run the transfer; verify counts and
-  `/health/db`; check Cottbus in the app.
+- [x] **Production: done 2026-10-07 ~23:00.** Fresh backup
+  `freipark-db-20261007T210032Z.sql.gz`, then the transfer in one
+  transaction: staged 156,863, inserted 156,863 → 80 cities / 581,774
+  spots, matching the rehearsal exactly. Verified from outside:
+  `/health/db` ok, 581,774 spots, 80 cities (cottbus 3,327,
+  frankfurt-oder 803, separate from frankfurt 11,759); anon
+  `spots_in_bbox` returns spots in central Cottbus and Frankfurt (Oder);
+  the app (simulator, production config) shows spots around Cottbus
+  Altmarkt. Server checkout still at `0b69eda` — `git pull` there to get
+  `008` and `rollback_008_cities.sql` (the transfer itself was piped from
+  the Mac).
