@@ -1293,7 +1293,25 @@ Frontend slice                          ▼
 
 ### R1 — `spot_reports` table and `report_spot` RPC
 
-- [ ] **R1: Write the first half of `supabase/migrations/007_spot_reports.sql` and its DB tests**
+- [x] **R1: Write the first half of `supabase/migrations/007_spot_reports.sql` and its DB tests — done 2026-10-07, local stack only.**
+  Applied to the local `db` container as `supabase_admin` (first confirmed
+  port 5432 was the local container, not a tunnel to production).
+  `FREIPARK_DB_WRITE_TESTS=1 pytest` → 27 passed (15 new + existing);
+  `spot_reports`, test users and test spots all back to 0 rows afterwards.
+  **Deviation from spec, spec updated first:** the generated `expires_at`
+  column failed with `generation expression is not immutable` —
+  `timestamptz + interval` depends on the session time zone. Dropped the
+  column; expiry is now `reported_at + 30 min`, computed where needed
+  (`report_spot` returns it; R2's read filter uses
+  `reported_at > now() - interval '30 minutes'`, which the existing index
+  covers). **Guard fix found by testing it:** pointing at a remote host
+  initially produced 15 *errors* (the session `db_conn` connected before
+  the guard ran — a 75 s timeout, no writes) instead of skips; `write_tx`
+  now checks the host and opt-in flag before opening the connection.
+  Verified: remote host → 15 skipped in 0.01 s; no flag → 15 skipped.
+  Guard is an allowlist (`localhost`/`127.0.0.1`/`::1`) plus an opt-in
+  flag, since a localhost SSH tunnel to production would pass a hostname
+  check — the rollback is what makes a mistake harmless.
   - Table, both indexes, RLS on with **no** client policies (spec § Data Model)
   - `report_spot(p_spot_id, p_status, p_lon, p_lat)`: `SECURITY DEFINER`, `SET search_path = public, pg_temp`, the six checks in spec order, radius 150 m for `street` and 300 m otherwise; `GRANT EXECUTE … TO authenticated`, `REVOKE … FROM anon, public`
   - `conftest.py`: prod-host guard (skip unless `ALLOW_PROD_DB_TESTS=1`), a rolled-back `tx` fixture, and an `as_user(uuid)` helper that sets role + JWT claims

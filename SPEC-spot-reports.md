@@ -95,9 +95,10 @@ CREATE TABLE spot_reports (
   user_id     UUID        NOT NULL REFERENCES auth.users(id)    ON DELETE CASCADE,
   status      TEXT        NOT NULL CHECK (status IN ('free', 'full')),
   reported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at  TIMESTAMPTZ GENERATED ALWAYS AS (reported_at + INTERVAL '30 minutes') STORED,
   distance_m  REAL        NOT NULL   -- reporter→spot distance at submit time; audit only
 );
+-- Expiry is derived, never stored: a report is active while
+-- reported_at > now() - interval '30 minutes'.
 
 -- Latest report per spot (read path) and per-user rate limits (write path)
 CREATE INDEX idx_spot_reports_spot_latest ON spot_reports (spot_id, reported_at DESC);
@@ -112,8 +113,12 @@ ALTER TABLE spot_reports ENABLE ROW LEVEL SECURITY;
 **Differences from the `SPEC-infra.md` Phase 2 sketch, and why:**
 
 - `'taken'` → `'full'` (decided above).
-- `expires_at` is a generated column, not client-supplied — clients can't
-  extend a report's lifetime.
+- No `expires_at` column: expiry is computed as `reported_at + 30 min`
+  wherever it's needed, so it can't drift from `reported_at` and clients
+  can't extend a report's lifetime. *(Changed during R1, 2026-10-07: a
+  generated `timestamptz + interval` column is rejected by Postgres as
+  "generation expression is not immutable", because that addition depends
+  on the session time zone.)*
 - Reporter **coordinates are not stored**, only `distance_m`. That's enough
   to audit the proximity check without keeping a location trail per user
   (data minimisation; see § Privacy).
@@ -159,7 +164,8 @@ report_at     timestamptz    -- reported_at of that report, NULL if none
 ```
 
 Implemented as a `LEFT JOIN LATERAL (… WHERE r.spot_id = ps.id AND
-r.expires_at > now() ORDER BY r.reported_at DESC LIMIT 1)`.
+r.reported_at > now() - interval '30 minutes' ORDER BY r.reported_at DESC
+LIMIT 1)` — both conditions are covered by `idx_spot_reports_spot_latest`.
 
 - Changing a function's return type requires `DROP FUNCTION` + `CREATE`
   (not `CREATE OR REPLACE`), and the `GRANT EXECUTE … TO anon, authenticated`
