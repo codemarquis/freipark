@@ -204,3 +204,108 @@ def test_deleting_the_user_deletes_their_reports(world):
     cur.execute("DELETE FROM auth.users WHERE id = %s", (world["user_id"],))
     cur.execute("SELECT count(*) FROM spot_reports WHERE user_id = %s", (world["user_id"],))
     assert cur.fetchone()[0] == 0
+
+
+# --- Read path: spots_in_bbox --------------------------------------------
+
+# A ~200 m box around BASE: contains the two test spots, and whatever real
+# OSM spots happen to sit there.
+SPOTS_IN_TEST_BBOX = "SELECT * FROM spots_in_bbox(%s, %s, %s, %s, 100000)"
+TEST_BBOX = (BASE_LON - 0.0015, BASE_LAT - 0.001, BASE_LON + 0.0015, BASE_LAT + 0.001)
+
+
+def add_report(cur, world, spot_type: str, status: str, minutes_ago: float) -> None:
+    act_as(cur, "admin")
+    cur.execute(
+        """
+        INSERT INTO spot_reports (spot_id, user_id, status, distance_m, reported_at)
+        VALUES (%s, %s, %s, 5, now() - make_interval(secs => %s))
+        """,
+        (world["spots"][spot_type], world["user_id"], status, minutes_ago * 60),
+    )
+
+
+def bbox_row(cur, spot_id: str, role: str = "anon") -> dict:
+    act_as(cur, role)
+    cur.execute(SPOTS_IN_TEST_BBOX, TEST_BBOX)
+    names = [d.name for d in cur.description]
+    rows = [dict(zip(names, row)) for row in cur.fetchall()]
+    matches = [r for r in rows if str(r["id"]) == spot_id]
+    assert len(matches) == 1, f"spot {spot_id} not returned exactly once"
+    return matches[0]
+
+
+def test_spots_in_bbox_keeps_its_old_columns_and_adds_two(world):
+    cur = world["cur"]
+    act_as(cur, "anon")
+    cur.execute(SPOTS_IN_TEST_BBOX, TEST_BBOX)
+    assert [d.name for d in cur.description] == [
+        "id", "spot_type", "access", "operator", "capacity", "lon", "lat",
+        "report_status", "report_at",
+    ]
+
+
+def test_spot_without_reports_has_null_report_fields(world):
+    row = bbox_row(world["cur"], world["spots"]["street"])
+    assert row["report_status"] is None
+    assert row["report_at"] is None
+
+
+@pytest.mark.parametrize("role", ["anon", "authenticated"])
+def test_active_report_is_visible_to_everyone(world, role):
+    cur = world["cur"]
+    add_report(cur, world, "street", "full", minutes_ago=4)
+    row = bbox_row(cur, world["spots"]["street"], role)
+    assert row["report_status"] == "full"
+    assert row["report_at"] is not None
+
+
+def test_report_older_than_30_minutes_is_not_shown(world):
+    cur = world["cur"]
+    add_report(cur, world, "street", "free", minutes_ago=31)
+    row = bbox_row(cur, world["spots"]["street"])
+    assert row["report_status"] is None
+    assert row["report_at"] is None
+
+
+def test_latest_report_wins(world):
+    cur = world["cur"]
+    add_report(cur, world, "lot", "free", minutes_ago=10)
+    add_report(cur, world, "lot", "full", minutes_ago=2)
+    assert bbox_row(cur, world["spots"]["lot"])["report_status"] == "full"
+
+
+def test_report_lookup_uses_the_spot_latest_index(world):
+    """The lateral lookup must hit idx_spot_reports_spot_latest, not scan the
+    table. EXPLAIN can't see inside a SECURITY DEFINER function, so this
+    explains the same query the function runs."""
+    cur = world["cur"]
+    act_as(cur, "admin")
+    # Enough rows that a sequential scan would be the wrong choice.
+    cur.execute(
+        """
+        INSERT INTO spot_reports (spot_id, user_id, status, distance_m, reported_at)
+        SELECT p.id, %s, 'free', 5, now() - interval '1 minute'
+          FROM parking_spots p
+         WHERE p.location && ST_MakeEnvelope(13.28, 52.47, 13.53, 52.57, 4326)
+         LIMIT 1000
+        """,
+        (world["user_id"],),
+    )
+    cur.execute("ANALYZE spot_reports")
+    cur.execute(
+        """
+        EXPLAIN
+        SELECT ps.id, r.status
+          FROM (SELECT p.id FROM parking_spots p
+                 WHERE p.location && ST_MakeEnvelope(13.28, 52.47, 13.53, 52.57, 4326)
+                 LIMIT 2000) ps
+          LEFT JOIN LATERAL (
+            SELECT sr.status FROM spot_reports sr
+             WHERE sr.spot_id = ps.id AND sr.reported_at > now() - interval '30 minutes'
+             ORDER BY sr.reported_at DESC LIMIT 1
+          ) r ON true
+        """
+    )
+    plan = "\n".join(row[0] for row in cur.fetchall())
+    assert "idx_spot_reports_spot_latest" in plan, plan

@@ -1321,7 +1321,31 @@ Frontend slice                          ▼
 
 ### R2 — `spots_in_bbox` v2
 
-- [ ] **R2: Extend `spots_in_bbox` with `report_status` / `report_at`**
+- [x] **R2: Extend `spots_in_bbox` with `report_status` / `report_at` — done 2026-10-07, local stack only.**
+  `FREIPARK_DB_WRITE_TESTS=1 pytest` → 22 passed in `test_spot_reports.py`
+  (7 new: column list unchanged + 2 new, NULLs with no report, visible to
+  `anon` and `authenticated`, hidden after 31 min, latest wins, lateral
+  lookup uses `idx_spot_reports_spot_latest` with 1,000 reports seeded).
+  Both functions now `SET search_path = public, extensions, pg_temp` —
+  PostGIS is in `public` locally, `extensions` added in case production
+  differs (check during R10).
+  **Latency** (anon, Berlin initial bbox, 2000 rows, 200 measured calls
+  per run after 10 warm-up, timed inside the DB with `clock_timestamp()`):
+
+  | | p50 | p95 |
+  |---|---|---|
+  | Baseline (002 function, before any change) | 1.9 ms | 48.8 ms |
+  | New function, 1,000 active reports seeded | 1.7 ms | 1.8 ms |
+  | Same session A/B — old | 1.7 ms | 49.2–49.4 ms |
+  | Same session A/B — new | 1.7 ms | 1.8 ms |
+
+  Criterion (p95 within +20%) met. The old function's ~49 ms outliers on
+  roughly 1 in 10 calls are reproducible and **not** JIT (identical with
+  `jit = off`); most likely they come from the old function being inlined
+  into the calling query in this harness, which `SECURITY DEFINER` + `SET`
+  prevent for the new one. Not claimed as a production speed-up — R10
+  re-measures on production, and real calls arrive via PostgREST, not a
+  plpgsql loop.
   - **First**, on the local stack *before* changing anything: run the Berlin-bbox `spots_in_bbox` call through `EXPLAIN (ANALYZE)` 10× and record p50/p95 in this task's notes as the baseline
   - Then in `007`: `DROP FUNCTION` + `CREATE` with the same args/defaults and two new nullable columns via `LEFT JOIN LATERAL` (latest unexpired report); `SECURITY DEFINER`, `SET search_path = public, pg_temp`; re-`GRANT EXECUTE … TO anon, authenticated`; all in the migration's single transaction
   - Acceptance: active report returned; `NULL` once backdated 31 min; latest of two wins; no `user_id` column in output; `anon` can still call it and gets the original seven columns unchanged; plan uses `idx_spot_reports_spot_latest`; p95 within +20% of baseline with ~1,000 synthetic reports seeded in the bbox (rolled back afterwards)

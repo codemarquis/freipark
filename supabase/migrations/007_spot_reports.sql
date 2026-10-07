@@ -50,7 +50,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 #variable_conflict use_column
 DECLARE
@@ -114,5 +114,66 @@ $$;
 -- anon; only signed-in users may report.
 REVOKE EXECUTE ON FUNCTION public.report_spot(uuid, text, float8, float8) FROM public, anon;
 GRANT  EXECUTE ON FUNCTION public.report_spot(uuid, text, float8, float8) TO authenticated;
+
+-- Read path: spots_in_bbox (002) gains report_status / report_at — the
+-- latest active report per spot. Same arguments, defaults and first seven
+-- columns as before, so app builds that predate this ignore the extras.
+-- A return-type change needs DROP + CREATE (not CREATE OR REPLACE); this
+-- whole file is one transaction, so callers never see it missing.
+DROP FUNCTION IF EXISTS public.spots_in_bbox(float8, float8, float8, float8, int);
+
+CREATE FUNCTION public.spots_in_bbox(
+  min_lon  float8,
+  min_lat  float8,
+  max_lon  float8,
+  max_lat  float8,
+  lim      int DEFAULT 2000
+)
+RETURNS TABLE (
+  id            uuid,
+  spot_type     text,
+  access        text,
+  operator      text,
+  capacity      int,
+  lon           float8,
+  lat           float8,
+  report_status text,         -- 'free' | 'full' | NULL (no active report)
+  report_at     timestamptz   -- when that report was made; NULL if none
+)
+-- SECURITY DEFINER because spot_reports has no client grants. It returns
+-- only the latest report's status and time, never user_id.
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public, extensions, pg_temp
+AS $$
+  SELECT
+    ps.id,
+    ps.spot_type,
+    ps.access,
+    ps.operator,
+    ps.capacity,
+    ST_X(ps.location) AS lon,
+    ST_Y(ps.location) AS lat,
+    r.status          AS report_status,
+    r.reported_at     AS report_at
+  FROM (
+    -- Pick the spots first, exactly as 002 did, then look up reports for
+    -- just those rows.
+    SELECT p.id, p.spot_type, p.access, p.operator, p.capacity, p.location
+      FROM parking_spots p
+     WHERE p.location && ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat, 4326)
+     LIMIT lim
+  ) ps
+  LEFT JOIN LATERAL (
+    SELECT sr.status, sr.reported_at
+      FROM spot_reports sr
+     WHERE sr.spot_id = ps.id
+       AND sr.reported_at > now() - INTERVAL '30 minutes'
+     ORDER BY sr.reported_at DESC
+     LIMIT 1
+  ) r ON true;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.spots_in_bbox(float8, float8, float8, float8, int) FROM public;
+GRANT  EXECUTE ON FUNCTION public.spots_in_bbox(float8, float8, float8, float8, int) TO anon, authenticated;
 
 COMMIT;
