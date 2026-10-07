@@ -1602,6 +1602,28 @@ Frontend slice                          ▼
     picks this up after `git pull` there (part of step 2 below).**
   - [x] **Decided 2026-10-07: keep the teal ring** (C1 finding 1).
   - Install the R8 cron entry (`30 3 * * *`, after the backup) — ask first.
+  - [x] **Step 1 — fresh production backup: done 2026-10-07 19:47 (box
+    time).** `freipark-db-20261007T194706Z.sql.gz`, 54,383,988 bytes, in
+    `r2:freipark-tiles/backups/db/` (nightly files are 54,383,9xx).
+    **Two failed attempts first, root-caused:** run as `ssh -t … backup_db.sh`,
+    the dump stalled with a 0-byte `/tmp` file; `pg_stat_activity` showed
+    the `pg_dump` session `active` on `ClientWrite` with no blocking pids —
+    Postgres was sending, nothing downstream was reading. The difference
+    from the working 03:00 cron run was the interactive TTY: Ubuntu's sudo
+    `use_pty` relays output through its own pty, which stalls
+    `sudo docker … | gzip` under an interactive session. Re-run with no
+    `-t` and `</dev/null` → done in ~6 s. **Run `backup_db.sh` by hand
+    only without `-t`** (`sudo docker` is NOPASSWD for `ubuntu`, so no
+    prompt is needed). Stuck process was already gone; both 0-byte `/tmp`
+    files removed.
+  - [x] **Rollback script written and tested locally before step 3:**
+    `supabase/self-host/rollback_007_spot_reports.sql` drops 007's
+    function/table objects and restores 002's `spots_in_bbox` + grant.
+    Local test: before → table present, `spots_in_bbox` SECURITY DEFINER,
+    API returns 9 columns; after rollback → table and both RPCs gone, not
+    SECURITY DEFINER, anon API call returns the original 7 columns;
+    re-running the rollback is a no-op; re-applying 007 restores
+    everything; backend suite 39/39 afterwards.
   - Order: (1) fresh `backup_db.sh` run; (2) apply `007` on the OVH box as `supabase_admin`; (3) confirm the *current* app still loads spots (old build, new RPC); (4) `EXPLAIN ANALYZE` p95 on prod vs the R2 baseline; (5) app release with the new UI; (6) live checks for spec criteria 4–7, including one real report from a real location
   - Rollback: `DROP FUNCTION` + recreate `002`'s `spots_in_bbox`, `DROP FUNCTION report_spot`, `DROP TABLE spot_reports` — written out and kept in this task's notes *before* step 2
   - Acceptance: spec § Success Criteria 1–10 all checked in `SPEC-spot-reports.md`
