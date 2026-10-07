@@ -1,4 +1,4 @@
-import { Linking } from 'react-native';
+import { Linking, Share } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import '../src/i18n';
 import { SpotDetailSheet } from '../src/features/map/SpotDetailSheet';
@@ -24,6 +24,11 @@ jest.mock('@gorhom/bottom-sheet', () => {
 });
 
 jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(false);
+const mockShare = jest.spyOn(Share, 'share');
+jest.mock('../src/lib/posthog', () => ({ posthog: { capture: jest.fn() } }));
+const { posthog: mockPosthog } = jest.requireMock('../src/lib/posthog') as {
+  posthog: { capture: jest.Mock };
+};
 
 // ReportButtons has its own tests; here it only needs to hand back its
 // callbacks so the sheet's wiring can be exercised.
@@ -336,5 +341,73 @@ describe('spot reports', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+// ─── share ───────────────────────────────────────────────────────────────────
+
+function sharedMessage(): string {
+  const content = mockShare.mock.calls[0]?.[0];
+  if (!content || !('message' in content) || typeof content.message !== 'string') {
+    throw new Error('Share.share was not called with a message');
+  }
+  return content.message;
+}
+
+describe('share', () => {
+  beforeEach(() => {
+    mockShare.mockReset();
+    mockPosthog.capture.mockClear();
+  });
+
+  it('has an accessible Share button', async () => {
+    await renderSheet(BASE);
+    expect(screen.getByRole('button', { name: 'Share this parking spot' })).toBeTruthy();
+  });
+
+  it("opens the phone's share sheet with type, access, coordinates and a maps link", async () => {
+    mockShare.mockResolvedValue({ action: Share.sharedAction });
+    await renderSheet(BASE);
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Share this parking spot' }));
+    });
+    expect(mockShare).toHaveBeenCalledTimes(1);
+    expect(sharedMessage().split('\n')).toEqual([
+      'Street parking · Free parking',
+      '52.52000, 13.40500',
+      'https://www.google.com/maps/search/?api=1&query=52.52000,13.40500',
+    ]);
+  });
+
+  it('includes an active report in the message', async () => {
+    mockShare.mockResolvedValue({ action: Share.sharedAction });
+    const reportAt = new Date(Date.now() - 4 * 60_000).toISOString();
+    await renderSheet({ ...BASE, report_status: 'full', report_at: reportAt });
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Share this parking spot' }));
+    });
+    expect(sharedMessage()).toContain('Reported occupied · 4 min ago');
+  });
+
+  it('records whether the share completed, without coordinates', async () => {
+    mockShare.mockResolvedValue({ action: Share.dismissedAction });
+    await renderSheet(BASE);
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Share this parking spot' }));
+    });
+    expect(mockPosthog.capture).toHaveBeenCalledWith('spot_shared', {
+      parking_spot_type: 'street',
+      parking_access: 'free',
+      completed: false,
+    });
+  });
+
+  it('does not crash if the share sheet fails', async () => {
+    mockShare.mockRejectedValue(new Error('no share targets'));
+    await renderSheet(BASE);
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Share this parking spot' }));
+    });
+    expect(screen.getByText('Street parking')).toBeTruthy();
   });
 });

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { posthog } from '../../lib/posthog';
 import { PaymentLinks } from './PaymentLinks';
+import { buildShareMessage } from './shareSpot';
 import { ReportButtons } from '../reports/ReportButtons';
 import { activeReport } from '../reports/reportStatus';
 import type { SubmittedReport } from '../reports/useReportSpot';
@@ -86,6 +87,36 @@ export function SpotDetailSheet({
     now,
   );
 
+  const statusText = report
+    ? report.minutesAgo < 1
+      ? t(report.status === 'free' ? 'report.statusFreeNow' : 'report.statusFullNow')
+      : t(report.status === 'free' ? 'report.statusFree' : 'report.statusFull', {
+          minutes: report.minutesAgo,
+        })
+    : null;
+
+  async function shareSpot() {
+    if (!spot) return;
+    try {
+      const result = await Share.share({
+        message: buildShareMessage({
+          typeLabel: t(TYPE_LABEL_KEY[spot.spot_type]),
+          accessLabel: spot.access ? t(ACCESS_LABEL_KEY[spot.access]) : t('spot.accessUnknown'),
+          statusLine: statusText,
+          lat: spot.lat,
+          lon: spot.lon,
+        }),
+      });
+      posthog?.capture('spot_shared', {
+        parking_spot_type: spot.spot_type,
+        parking_access: spot.access ?? 'unknown',
+        completed: result.action === Share.sharedAction,
+      });
+    } catch {
+      // No share targets / sheet failed to open: nothing useful to show.
+    }
+  }
+
   function handleReported(submitted: SubmittedReport) {
     setJustReported(submitted);
     setNow(Date.now());
@@ -158,11 +189,7 @@ export function SpotDetailSheet({
               <Text
                 style={[styles.report, report.status === 'free' ? styles.reportFree : styles.reportFull]}
               >
-                {report.minutesAgo < 1
-                  ? t(report.status === 'free' ? 'report.statusFreeNow' : 'report.statusFullNow')
-                  : t(report.status === 'free' ? 'report.statusFree' : 'report.statusFull', {
-                      minutes: report.minutesAgo,
-                    })}
+                {statusText}
               </Text>
             )}
 
@@ -196,6 +223,14 @@ export function SpotDetailSheet({
               onSignInRequired={onSignInRequired}
             />
 
+            <Pressable
+              style={styles.mapsButton}
+              onPress={shareSpot}
+              accessibilityRole="button"
+              accessibilityLabel={t('spot.shareA11y')}
+            >
+              <Text style={styles.mapsButtonText}>{t('spot.share')}</Text>
+            </Pressable>
             {appleMapsAvailable && (
               <Pressable style={styles.mapsButton} onPress={openInAppleMaps}>
                 <Text style={styles.mapsButtonText}>

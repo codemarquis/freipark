@@ -244,6 +244,31 @@ const PARKNOW_ANDROID  = 'https://play.google.com/store/apps/details?id=com.park
 No undocumented URI schemes. `Linking.openURL` opens the store natively on
 device, or falls back to the web URL in Expo Go / browser.
 
+### Share a spot (added 2026-10-07)
+
+A **Share** button in `SpotDetailSheet` opens the phone's own share sheet
+(React Native `Share.share` — no new dependency, no FreiPark server
+involved), so a driver can send a spot to someone via WhatsApp, SMS, mail,
+etc. The recipient doesn't need FreiPark.
+
+Message (localised, built by a pure `buildShareMessage` helper):
+
+```
+Parking lot · Free parking
+Reported free · 4 min ago            ← only while a report is active
+52.50562, 13.39693
+https://www.google.com/maps/search/?api=1&query=52.50562,13.39693
+```
+
+- **Link:** Google Maps' documented cross-platform URL — opens the Maps app
+  on iOS and Android, or the browser. A link only: no API key, no call
+  from FreiPark, so no per-use cost.
+- **Coordinates:** 5 decimals (~1 m), `lat, lon` order as people paste
+  them into map apps.
+- **Address:** added to the message once spots carry one (address task).
+- **Analytics:** `spot_shared` with `parking_spot_type`, `parking_access`
+  and whether the share sheet completed — never coordinates.
+
 ---
 
 ## Search & Geocoding

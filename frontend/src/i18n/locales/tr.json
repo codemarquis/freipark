@@ -60,7 +60,9 @@
     "openInGoogleMaps": "Google Haritalar'da Aç",
     "minutesShort": "dk",
     "lessThanOneMin": "<1 dk",
-    "hoursMinutes": "{{h}} sa {{m}} dk"
+    "hoursMinutes": "{{h}} sa {{m}} dk",
+    "share": "Paylaş",
+    "shareA11y": "Bu park yerini paylaş"
   },
   "payment": {
     "openEasyPark": "EasyPark'ı Aç"

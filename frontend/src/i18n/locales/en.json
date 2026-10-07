@@ -60,7 +60,9 @@
     "openInGoogleMaps": "Open in Google Maps",
     "minutesShort": "min",
     "lessThanOneMin": "<1 min",
-    "hoursMinutes": "{{h}}h {{m}}m"
+    "hoursMinutes": "{{h}}h {{m}}m",
+    "share": "Share",
+    "shareA11y": "Share this parking spot"
   },
   "payment": {
     "openEasyPark": "Open EasyPark"
