@@ -209,6 +209,33 @@ every seeded city in one pass. The full coordinate list is the source of
 truth in `supabase/migrations/004_add_german_cities.sql` — not duplicated
 here to avoid drift.
 
+**Coverage rule (2026-10-07, migration `008_add_cities_over_100k.sql`):**
+every German city with **≥ 100,000 inhabitants**, plus **Cottbus** and
+**Frankfurt (Oder)** by request — 80 cities in total (33 from `004` + 47).
+Prompted by a user report that Cottbus and Frankfurt (Oder) showed no
+spots: only the seeded cities are imported, so everywhere else is empty.
+
+- **Source of the list:** de.wikipedia "Liste der Großstädte in
+  Deutschland" (Destatis figures, 2025 column) — 79 cities ≥ 100k, all 33
+  existing ones among them.
+- **Bounding boxes:** each city's OSM administrative-boundary relation via
+  Nominatim (searched as "<city>, <state>, Deutschland"; only
+  `boundary=administrative` relations in the expected state accepted),
+  rounded *outward* to 3 decimals so nothing at the edge is clipped. The
+  relation id is recorded next to each row in `008`.
+- **Bremerhaven deliberately omitted:** the `bremen` entry imports the
+  whole Bremen state extract (no `bbox`), which already includes
+  Bremerhaven (1,179 spots there are present under `bremen`).
+- **Overlapping boxes** (dense in the Ruhr/Rhine area) are harmless: the
+  import's `ON CONFLICT (osm_id, osm_type) DO UPDATE` never changes
+  `city_id`, so a spot stays with the first city that imported it. The
+  map queries by area, not by city, so users see every spot either way;
+  only per-city counts in `/health/db` are affected.
+- New Geofabrik extracts needed: none beyond those already used, except
+  that more cities now draw on `bayern`, `nordrhein-westfalen`,
+  `baden-wuerttemberg`, `hessen`, `niedersachsen`, `rheinland-pfalz`,
+  `thueringen` and `brandenburg`.
+
 ### `parking_spots`
 
 The core table. Populated exclusively by the server-side OSM import script; no direct client writes.
