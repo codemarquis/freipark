@@ -2,7 +2,14 @@
 
 **Module:** `auth`
 **Capability map:** [CLAUDE.md](CLAUDE.md) → module order `infra → map → auth`. This is the third module; depends on `infra` (Supabase Auth is already provisioned as part of the Supabase project) and is independent of `map` (no map code changes required, though the map screen gains one new entry point).
-**Status:** Draft — awaiting review before implementation begins.
+**Status:** Implemented (A1–A6, `tasks/plan.md` § Implementation Plan: auth
+module). *(Reconciled 2026-10-07 — this line still said "Draft" long after
+the module shipped.)* Auth now runs on self-hosted Supabase (GoTrue) since
+the 2026-09-27 cutover — real email delivery via Brevo (2026-09-28) and
+real SMS OTP via **Vonage** (2026-09-29), not Twilio/MessageBird as planned
+below; see `tasks/plan.md` § SS7. Still outstanding: the manual
+sign-in / sign-out / session-persistence device checks (§ Success
+Criteria 2, 4, 5).
 
 ---
 
@@ -45,7 +52,7 @@ to the existing signed-out map experience.
 | Auth UI | `@gorhom/bottom-sheet` | Already a dependency, already used for `SpotDetailSheet` — reuse the same bottom-sheet pattern for visual/interaction consistency instead of introducing a new UI paradigm |
 | Validation | Client-side (email format, password length) + Supabase server-side enforcement | No new validation library; Supabase rejects invalid signups itself |
 | Transactional email (SMTP) | Brevo, via Supabase's custom-SMTP setting | *(Added 2026-08-24.)* Fixes both the shared-sender branding and Supabase's low default send-rate. Dashboard + DNS config only — see § Auth Flows and § Open Questions. |
-| Phone auth (SMS/OTP) | Twilio (testing) → MessageBird (production), both via Supabase's Phone provider setting | *(Added 2026-08-24.)* Neither provider is referenced anywhere in app code — `supabase.auth.signInWithOtp`/`verifyOtp` are provider-agnostic; the SMS provider is entirely a Supabase Dashboard → Authentication → Providers → Phone credential. Swapping Twilio → MessageBird later is a dashboard credential change, not a code change. See § Auth Flows. |
+| Phone auth (SMS/OTP) | Twilio (testing) → MessageBird (production), both via Supabase's Phone provider setting | *(Added 2026-08-24.)* Neither provider is referenced anywhere in app code — `supabase.auth.signInWithOtp`/`verifyOtp` are provider-agnostic; the SMS provider is entirely a Supabase Dashboard → Authentication → Providers → Phone credential. Swapping Twilio → MessageBird later is a dashboard credential change, not a code change. See § Auth Flows. **Superseded 2026-09-29:** production uses **Vonage** — Twilio's trial tier can't issue the Messaging Service SID GoTrue needs, and new MessageBird ("Bird") accounts only get new-platform keys GoTrue's legacy-API provider can't use (`tasks/plan.md` § SS7). Still zero app-code impact, as predicted. |
 
 No new npm dependencies, no new database tables. **Still no backend (FastAPI) changes** — confirmed 2026-08-24 while investigating the JWT signing-key question: the backend has zero JWT-verification code today (grepped the whole tree), so there's nothing for a key-algorithm change to affect. See `SPEC-infra.md` § Verifying Supabase JWTs (Future) for what backend code would look like *if* a protected route is ever added — not built now, since unused verification code with no caller would be untestable dead code.
 
@@ -198,6 +205,14 @@ const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
 *Everything in this section happens in the Supabase Dashboard (and, for
 email, freipark.com's DNS). None of it is app code — recorded here so the
 decisions and exact values aren't scattered across chat history.*
+
+> **Superseded 2026-09-27/29 — kept for history.** Since the self-hosted
+> cutover there is no Supabase Dashboard: these settings are `GOTRUE_*`
+> env vars on the `auth` service in `docker-compose.yml` (secrets in the
+> root `.env`). Email is live via Brevo (`GOTRUE_SMTP_*`), phone OTP via
+> Vonage (`GOTRUE_SMS_PROVIDER=vonage`, `GOTRUE_SMS_VONAGE_*`). Full
+> build log, including the Twilio and MessageBird dead ends:
+> `tasks/plan.md` § SS7.
 
 ### Email — Brevo SMTP
 
@@ -391,7 +406,11 @@ instead, as with every other Supabase call in this codebase.
    correct, but the confirmation link Supabase emails points at
    `localhost:3000` and fails (§ Open Questions), so no one can actually
    complete a signup against the real project right now until the
-   dashboard's Site URL is fixed.
+   dashboard's Site URL is fixed. **Unblocked 2026-09-28:** confirmation
+   links now resolve (`GOTRUE_SITE_URL` → `freipark.com/confirmed.html`,
+   plus Kong routes for GoTrue's bare `/verify` path) — verified with a
+   real email link returning `303` and `email_verified: true`
+   (`tasks/plan.md` § SS7 email half).
 2. Signing in with valid credentials succeeds; `AccountButton` reflects
    signed-in state
 3. Signing in with wrong credentials shows a clear inline error, no crash
@@ -409,7 +428,10 @@ instead, as with every other Supabase call in this codebase.
    a session the same way email does; a wrong or expired code shows an
    inline error, no crash — **unverified live** (unit-tested only; needs
    the dashboard-side Twilio config below before it can be exercised
-   against the real project)
+   against the real project). **Update 2026-09-29:** real SMS delivery
+   verified via Vonage (`POST /auth/v1/otp` → code received on a real
+   phone); the in-app verify-and-sign-in step hasn't yet been exercised
+   live
 10. *(New 2026-08-24)* No email/phone provider name (Brevo, Twilio,
     MessageBird) appears anywhere in `frontend/src/` — confirmed by design,
     since none of §Auth Flows' code references a provider directly
@@ -421,10 +443,10 @@ instead, as with every other Supabase call in this codebase.
 | Question | Status |
 |---|---|
 | Does the Supabase project currently require email confirmation before first sign-in? | **Resolved 2026-08-23 — yes**, confirmed by an actual signup against the real project (a confirmation email arrived). Superseded the earlier "unverified from this environment" note. |
-| **New 2026-08-23:** the confirmation email's link is broken. | **Confirmed bug, not yet fixed.** The link points to `redirect_to=http://localhost:3000` — the Supabase project's **Site URL** (Authentication → URL Configuration in the dashboard) is still the default placeholder from project creation, and FreiPark has no web frontend for it to resolve to. This is dashboard config, not app code — someone with Supabase dashboard access needs to point Site URL at either (a) a minimal static "confirmed, return to the app" page (quick, no app changes), or (b) a proper `freipark://` deep link, which requires the same `app.json` URI-scheme work as the password-reset item below. Until fixed, **no one can actually complete signup** — this blocks the "Sign up creates an account" success criterion end-to-end, not just the UX polish of it. |
-| **New 2026-08-23:** confirmation emails are sent from Supabase's own address, not freipark.com. | **Decided 2026-08-24: Brevo.** Custom SMTP via Brevo's relay, with a verified freipark.com sending domain (SPF + DKIM). Exact dashboard field values in § Auth Flows below. Also raises Supabase's default shared-sender rate limit (30/hr even on custom SMTP per Supabase's own docs), which matters at real usage volume regardless of branding. Dashboard + DNS work, not app code — not yet executed as of this writing. |
+| **New 2026-08-23:** the confirmation email's link is broken. | **Confirmed bug, not yet fixed.** The link points to `redirect_to=http://localhost:3000` — the Supabase project's **Site URL** (Authentication → URL Configuration in the dashboard) is still the default placeholder from project creation, and FreiPark has no web frontend for it to resolve to. This is dashboard config, not app code — someone with Supabase dashboard access needs to point Site URL at either (a) a minimal static "confirmed, return to the app" page (quick, no app changes), or (b) a proper `freipark://` deep link, which requires the same `app.json` URI-scheme work as the password-reset item below. Until fixed, **no one can actually complete signup** — this blocks the "Sign up creates an account" success criterion end-to-end, not just the UX polish of it. **Fixed 2026-09-28** via option (a): `GOTRUE_SITE_URL=https://freipark.com/confirmed.html` on the self-hosted stack — see `tasks/plan.md` § SS7 email half. |
+| **New 2026-08-23:** confirmation emails are sent from Supabase's own address, not freipark.com. | **Decided 2026-08-24: Brevo.** Custom SMTP via Brevo's relay, with a verified freipark.com sending domain (SPF + DKIM). Exact dashboard field values in § Auth Flows below. Also raises Supabase's default shared-sender rate limit (30/hr even on custom SMTP per Supabase's own docs), which matters at real usage volume regardless of branding. Dashboard + DNS work, not app code — not yet executed as of this writing. **Done 2026-09-28** — real Brevo delivery live on the self-hosted stack (`GOTRUE_SMTP_*`). |
 | Password reset — build now or defer? | **Still deferred.** Real scope: `app.json` URI scheme + deep-link handling for the reset redirect — the same infrastructure the broken confirmation-email redirect above needs. Worth doing both together if/when this gets built, rather than twice. |
 | Any profile data beyond `auth.users` (display name, avatar)? | **Deferred — no.** Nothing in the app consumes profile data yet; adding a `profiles` table now would be speculative. Revisit when Phase 2 (`spot_reports`) needs to display "reported by X". |
 | Where exactly does `AccountButton` sit visually relative to `SearchBar`? | **Resolved** — confirmed correct via live simulator screenshot 2026-08-23, no overlap. |
-| **New 2026-08-24:** phone SMS provider — Twilio or MessageBird? | **Decided: both, sequentially.** Twilio for initial testing (free trial credit, no card), MessageBird for production later. Zero app-code impact either way — see Tech Stack table. Dashboard config steps in § Auth Flows. |
+| **New 2026-08-24:** phone SMS provider — Twilio or MessageBird? | **Decided: both, sequentially.** Twilio for initial testing (free trial credit, no card), MessageBird for production later. Zero app-code impact either way — see Tech Stack table. Dashboard config steps in § Auth Flows. **Superseded 2026-09-29: Vonage** — both planned providers proved unusable with GoTrue (see Tech Stack table). Open polish item: SMS sender shows "Vonage", not "FreiPark", until an alphanumeric Sender ID is registered for Germany. |
 | **New 2026-08-24:** does migrating Supabase's JWT signing keys to asymmetric (RS256/ES256) require a backend code change? | **No** — confirmed by grepping the entire backend: there is no JWT-verification code anywhere in this codebase today, so there's nothing for a key-algorithm change to affect. The premise behind "update the backend's token verification" assumed existing verification code that doesn't exist. See `SPEC-infra.md` § Verifying Supabase JWTs (Future) for the JWKS-based approach to use *when* a protected backend route is actually added (e.g. Phase 2 `spot_reports`) — documented as ready-to-build guidance, not built now, since verification code with no route to protect would be untestable dead code. |

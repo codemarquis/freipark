@@ -943,7 +943,7 @@ implementation-time concerns.)*
 
 ### SS7 — Email and phone OTP configuration
 
-- [ ] **SS7: Configure `GOTRUE_SMTP_*` (Brevo) and `GOTRUE_SMS_TWILIO_*` env vars — blocked, not done, attempted 2026-09-26/27.**
+- [x] **SS7: Configure email and SMS delivery — done 2026-09-29 (email via Brevo, SMS via Vonage); see the two sub-items below.** *(Checkbox reconciled 2026-10-07 — the entry below is the original 2026-09-26/27 "blocked" log, kept as history.)*
   **Premise corrected first:** neither Brevo nor Twilio/MessageBird was
   ever actually configured on the *managed* project's dashboard — both
   were only decided/documented in `SPEC-auth.md`, dashboard+DNS work never
@@ -1231,5 +1231,8 @@ implementation-time concerns.)*
 
 Mirrors `SPEC-infra.md` § Self-Hosted Supabase Migration (Proposed) →
 Success Criteria exactly — see that section for the authoritative list.
-All boxes there are currently unchecked; this plan is how they get
-checked, task by task, in the order above.
+*(Reconciled 2026-10-07:)* 7 of 8 are now checked. The open one is
+"existing accounts can still sign in post-cutover" — `auth.users` was
+migrated, but sign-in has only been verified with a throwaway account
+(SS8), not the pre-existing migrated one. SS11's rollback window
+(~2026-10-11) is tracked separately above.

@@ -7,15 +7,16 @@
 now-inaccurate details (Berlin-only seed, no routing infra) are corrected
 below. Supabase Auth, listed in the original objective, is **not yet
 implemented** — no `src/features/auth` exists; see `CLAUDE.md`'s module
-order (`infra → map → auth`) for where it fits next.
+order (`infra → map → auth`) for where it fits next. *(Superseded: the
+auth module has since shipped — see `SPEC-auth.md`.)*
 
 **2026-09-27:** self-hosted Supabase (same Postgres/PostGIS/Auth/RLS, run
 on the project's own OVH box instead of Supabase's cloud) is now **live
 in production** — `backend/.env`/`frontend/.env` point at
 `https://supabase.freipark.com`, not managed Supabase. See § Self-Hosted
-Supabase Migration below for the full build-out (SS1–SS10 all done;
-SS7's email/SMS delivery still blocked externally — see that section's
-own status). The managed project is kept as a rollback safety net through
+Supabase Migration below for the full build-out (SS1–SS10 all done,
+including SS7's real email delivery via Brevo, 2026-09-28, and SMS OTP
+via Vonage, 2026-09-29). The managed project is kept as a rollback safety net through
 ~2026-10-11 (`tasks/plan.md` § SS11), not deleted yet. Tables/RLS
 structure described elsewhere in this document are identical on both
 sides (same migrations applied to both) — only the connection endpoint
@@ -42,7 +43,7 @@ This module produces no user-visible UI. Success means: any other module can con
 | Layer | Choice | Rationale |
 |---|---|---|
 | Database | Self-hosted Supabase (PostgreSQL 15 + PostGIS, `supabase/postgres` on the OVH box) | **Live since 2026-09-27** — see § Self-Hosted Supabase Migration. Was managed Supabase (kept as rollback safety net through ~2026-10-11) |
-| Auth | Self-hosted Supabase Auth (GoTrue, email+password + phone OTP) | **Live since 2026-09-27.** Email/phone real delivery still blocked (SS7) — autoconfirm on for both in the meantime |
+| Auth | Self-hosted Supabase Auth (GoTrue, email+password + phone OTP) | **Live since 2026-09-27.** Real delivery live since SS7: email via Brevo SMTP (2026-09-28), SMS OTP via Vonage (2026-09-29); autoconfirm off for both |
 | Map tile storage | Cloudflare R2 | No egress fees (unlike S3); PMTiles served via HTTP range requests |
 | Backend runtime | FastAPI (Python 3.12) | Async, Pydantic, strong PostGIS ecosystem |
 | Schema migrations | Supabase CLI (`supabase db push`) | Version-controlled SQL files in `supabase/migrations/` |
@@ -392,8 +393,8 @@ is a real infra cost (disk + one-time compute), even though it's not a
 **Live in production since 2026-09-27.** Specced 2026-09-26, built and
 cut over 2026-09-26/27 — SS1–SS10 all done, see `tasks/plan.md` § SS1–SS12
 for the full build log, real bugs hit and fixed along the way, and
-current status of SS7 (email/SMS delivery — blocked externally, autoconfirm
-on) and SS11 (rollback window, in progress through ~2026-10-11). The
+current status of SS7 (email/SMS delivery — done 2026-09-28/29, Brevo +
+Vonage) and SS11 (rollback window, in progress through ~2026-10-11). The
 sections below describe what was actually built, not a proposal.
 
 ### Why
@@ -446,7 +447,7 @@ points to.
 | Service | Image | Role | Exposed externally? |
 |---|---|---|---|
 | `db` | `supabase/postgres` | Postgres 15 + PostGIS, same extension set as managed Supabase | No — internal Compose network only |
-| `auth` | `supabase/gotrue` | Email+password, phone OTP (Twilio), JWT issuing | No — behind Kong |
+| `auth` | `supabase/gotrue` | Email+password (Brevo SMTP), phone OTP (Vonage), JWT issuing | No — behind Kong |
 | `rest` | `postgrest/postgrest` | Auto-generated REST API over Postgres; enforces RLS | No — behind Kong |
 | `kong` | `kong` | API gateway: routes `/rest/v1/*` → `rest`, `/auth/v1/*` → `auth` | Yes — via Caddy |
 
@@ -533,7 +534,9 @@ Self-hosting means this project now owns what Supabase managed before:
 - **Email/SMS provider config.** Brevo SMTP and Twilio, previously
   Supabase dashboard fields, become `auth` container env vars
   (`GOTRUE_SMTP_*`, `GOTRUE_SMS_TWILIO_*`) — same providers, same
-  credentials, different config surface.
+  credentials, different config surface. *(As built: Brevo as planned;
+  SMS ended up on Vonage, `GOTRUE_SMS_VONAGE_*` — Twilio's trial tier
+  couldn't issue a Messaging Service SID. See `tasks/plan.md` § SS7.)*
 
 ### Risks
 
@@ -546,16 +549,17 @@ Self-hosting means this project now owns what Supabase managed before:
 
 ### Success Criteria
 
-*(Unchecked — this is a proposal, not yet built.)*
+*(Reconciled 2026-10-07 against `tasks/plan.md` § SS1–SS12 — each box
+below is ticked only where that log records a real verification.)*
 
-- [ ] `db`, `auth`, `rest`, `kong` services added to `docker-compose.yml`, running healthy alongside `osrm-germany`/`caddy`/`api`
-- [ ] Every file in `supabase/migrations/` applies cleanly to the new instance; `backend/tests/test_db.py`'s four tests pass against it
-- [ ] `cities` + `parking_spots` data migrated and verified (`import_all.py` re-run as a sanity check, not just a trusted dump)
-- [ ] `auth.users` migrated; existing accounts can still sign in post-cutover
-- [ ] Phone OTP (Twilio) and email (Brevo) both re-verified end-to-end against the self-hosted `auth` service, not assumed to carry over
-- [ ] Staging cutover validated (sign-in, sign-up, spot loading) before touching production `.env`
-- [ ] Backup cron job in place **and test-restored at least once** before the managed Supabase project is deleted (not just paused)
-- [ ] This file and `tasks/plan.md` updated to reflect the cutover once live, per this project's own reconciliation practice
+- [x] `db`, `auth`, `rest`, `kong` services added to `docker-compose.yml`, running healthy alongside `osrm-germany`/`caddy`/`api` — SS2, SS4
+- [x] Every file in `supabase/migrations/` applies cleanly to the new instance; `backend/tests/test_db.py`'s four tests pass against it — SS3 (4/4)
+- [x] `cities` + `parking_spots` data migrated and verified (`import_all.py` re-run as a sanity check, not just a trusted dump) — SS5, SS6, SS9 (33 cities / 424,911 spots on the OVH box)
+- [ ] `auth.users` migrated; existing accounts can still sign in post-cutover — **half done:** `auth.users`/`identities` migrated with matching `id`s (SS5, SS9), but sign-in was only verified with a throwaway account (SS8), never with the pre-existing migrated account
+- [x] Phone OTP and email (Brevo) both re-verified end-to-end against the self-hosted `auth` service, not assumed to carry over — SS7 (Brevo 2026-09-28; phone via **Vonage**, not Twilio, 2026-09-29)
+- [x] Staging cutover validated (sign-in, sign-up, spot loading) before touching production `.env` — SS8
+- [x] Backup cron job in place **and test-restored at least once** before the managed Supabase project is deleted (not just paused) — SS9
+- [x] This file and `tasks/plan.md` updated to reflect the cutover once live, per this project's own reconciliation practice — SS12, plus this 2026-10-07 pass
 
 ### Open Questions
 
