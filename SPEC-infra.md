@@ -797,75 +797,53 @@ if routing correctness becomes a source of bugs.
 
 ---
 
-## Verifying Supabase JWTs (Future)
+## Verifying Supabase JWTs
 
-*(Added 2026-08-24, in response to a question about migrating the FastAPI
-backend from a shared-secret JWT check to JWKS-based verification.)*
+*(Rewritten 2026-10-07. The 2026-08-24 version of this section said the
+backend had no JWT code and proposed JWKS/RS256 verification "for when
+it's needed". Both are now wrong: verification exists, and it uses HS256
+because the deployment changed underneath the proposal.)*
 
-**There is nothing to migrate.** Grepped the entire backend — `backend/`
-has zero JWT-verification code today, no `jwt`/`jwks`/token-decode logic
-anywhere, and no JWT library in `requirements.txt`. Both existing routes
-(`/health/db`, `/route`) are intentionally public; `/route` rate-limits by
-IP, not by user identity. So rotating the Supabase project's JWT signing
-keys from a shared secret to asymmetric (RS256/ES256) is a pure dashboard
-action with **zero backend impact**, because nothing here currently cares
-what algorithm signed the token.
+**What's built:** `backend/auth.py` exposes one FastAPI dependency,
+`get_current_user_id`, which verifies the caller's GoTrue access token and
+returns its `sub` claim (`auth.users.id`):
 
-**Caveat worth having up front:** most Supabase-backed features — including
-Phase 2's `spot_reports` below — don't need backend JWT verification at
-all. The established pattern in this codebase (`useSpots.ts` calling
-`supabase.rpc()` directly) is for the *client* to call Supabase directly
-with the user's session token, and let Postgres RLS policies (checking
-`auth.uid()`) enforce who can write what — Supabase's own infrastructure
-verifies the JWT internally for that path, not our code. Backend JWT
-verification only becomes necessary if a **FastAPI route** needs to know
-the caller's identity for logic RLS can't express (e.g., server-side
-per-user rate limiting, a business rule spanning multiple tables). Don't
-build the snippet below speculatively — it has no caller yet, which means
-no test coverage and no way to verify it actually works. Build it in the
-same change that adds the first route that needs it.
+- Algorithm **HS256**, shared secret `JWT_SECRET` (env var — the same
+  secret the self-hosted `auth` service signs with; see § Self-Hosted
+  Supabase Migration → JWT keys), `audience="authenticated"`.
+- Library: `python-jose[cryptography]` (`backend/requirements.txt`).
+- Invalid, expired, or wrong-secret tokens → `401 "Invalid or expired token"`.
 
-**When that day comes**, verify against Supabase's JWKS endpoint rather
-than a static secret — this is what asymmetric signing keys enable, and
-it's the right way to do it from day one rather than a later migration:
+**Why HS256, not the JWKS approach this section used to recommend:** the
+JWKS design assumed managed Supabase with asymmetric signing keys. Since
+the 2026-09-27 cutover, GoTrue is self-hosted and signs with a single
+shared secret this project mints and owns (`tasks/plan.md` § SS1). There
+is no JWKS endpoint to verify against, so the code verifies with the
+secret directly.
 
-```python
-# backend/auth.py (does not exist yet — for when it's needed)
-import time
-import httpx
-from fastapi import HTTPException, Header
-from jose import jwt  # add python-jose[cryptography] to requirements.txt
+**Only caller today:** `DELETE /account` (`backend/routers/account.py`),
+which needs the caller's verified identity before calling GoTrue's admin
+API with the service-role key. Tests: `backend/tests/test_account.py`
+(valid token accepted, wrong-secret token rejected, route behaviour with
+the dependency overridden).
 
-JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-_jwks_cache: dict | None = None
-_jwks_cached_at: float = 0
-JWKS_CACHE_TTL_S = 3600  # Supabase rotates keys infrequently; no need to refetch every request
+**When to use it — and when not to:** most user-scoped features don't
+need backend verification at all. The established pattern is for the
+client to call Supabase directly (`supabase.rpc()` / `.from()`) with the
+user's session token and let Postgres enforce access via RLS and
+`auth.uid()`; PostgREST verifies the JWT on that path, not our code.
+`SPEC-spot-reports.md` follows that pattern (a `SECURITY DEFINER` RPC
+checking `auth.uid()`, no FastAPI route). Use `get_current_user_id` only
+when a FastAPI route needs the caller's identity for something RLS can't
+express — e.g. calling an admin API, as `/account` does.
 
-async def _get_jwks() -> dict:
-    global _jwks_cache, _jwks_cached_at
-    if _jwks_cache is None or time.time() - _jwks_cached_at > JWKS_CACHE_TTL_S:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(JWKS_URL)
-            resp.raise_for_status()
-            _jwks_cache = resp.json()
-            _jwks_cached_at = time.time()
-    return _jwks_cache
-
-async def get_current_user_id(authorization: str = Header(...)) -> str:
-    token = authorization.removeprefix("Bearer ").strip()
-    jwks = await _get_jwks()
-    try:
-        claims = jwt.decode(token, jwks, algorithms=["RS256", "ES256"], audience="authenticated")
-    except Exception:
-        raise HTTPException(401, "Invalid or expired token")
-    return claims["sub"]  # Supabase's auth.users.id
-```
-
-Module-level `_jwks_cache` is fine for a single-process FastAPI deployment
-(this project's current Docker Compose setup — one `api` container); if
-that ever changes to multiple worker processes without shared state,
-switch to a proper shared cache (Redis, or a short-TTL in-memory cache per
-worker is still fine since JWKS rotation is rare).
+**If signing ever moves to asymmetric keys** (RS256/ES256), the change is
+contained in `backend/auth.py`: verify against GoTrue's JWKS
+(`/auth/v1/.well-known/jwks.json`, cached in-process) instead of
+`JWT_SECRET`, keeping the dependency's signature unchanged so callers
+don't move. Rotating `JWT_SECRET` today means re-minting the `anon` and
+`service_role` keys, updating every `.env` that holds them, and
+restarting `auth`, `rest`, `kong` and `api` together.
 
 ---
 

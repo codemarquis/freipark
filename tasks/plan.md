@@ -532,7 +532,7 @@ main task, not part of it.
 
 # Addendum: Phone Auth, Email SMTP, JWT Signing Keys
 
-**Spec:** [SPEC-auth.md](../SPEC-auth.md) § Phone auth (OTP), § Dashboard Configuration; [SPEC-infra.md](../SPEC-infra.md) § Verifying Supabase JWTs (Future)
+**Spec:** [SPEC-auth.md](../SPEC-auth.md) § Phone auth (OTP), § Dashboard Configuration; [SPEC-infra.md](../SPEC-infra.md) § Verifying Supabase JWTs
 **Date:** 2026-08-24
 **Status:** Code portion (phone auth) done and tested. Two of three pieces requested were manual/dashboard-only with no code to write — see below.
 
