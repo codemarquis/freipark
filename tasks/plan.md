@@ -1635,3 +1635,37 @@ Frontend slice                          ▼
 
 Mirrors `SPEC-spot-reports.md` § Success Criteria — see that section for
 the authoritative list. Nothing checked yet.
+
+---
+
+# City coverage expansion (2026-10-07)
+
+**Spec:** [SPEC-infra.md](../SPEC-infra.md) § Seeded Cities → Coverage rule.
+User report: Cottbus and Frankfurt (Oder) showed no spots — only seeded
+cities are imported. Decision: every German city ≥ 100k, plus Cottbus and
+Frankfurt (Oder) → migration `008` (47 cities; 80 total; Bremerhaven
+omitted, already covered by the Bremen state extract).
+
+- [x] **Local:** `008` applied; all 47 imported in ~3 min → 156,863 new
+  spots (581,774 total). `test_cities.py` (3 read-only tests) failed
+  first, then passed; backend suite 42/42.
+- **Checked, not bugs:** Göttingen (33,606) and Hamm (10,340) are high
+  because most of their spots are individually mapped bays
+  (`amenity=parking_space`: 29,133 and 8,707); their extents match the
+  city boxes. Leverkusen/Oberhausen/Herne/Mülheim are low because
+  neighbouring boxes overlap and the import never reassigns `city_id`.
+- **Found, not fixed (pre-existing, separate task):** 587 rows (0.1%) are
+  not car parking (`charging_station`, `waste_basket`, `bicycle_parking`,
+  `atm`, …) — most likely tagged member nodes of parking ways that
+  `osmium tags-filter` keeps as referenced objects. Also: 41% of all
+  spots are single `parking_space` bays.
+- [x] **Production transfer prepared and rehearsed locally:** one
+  transaction = `008`'s city rows + the new cities' spots (156,863 rows,
+  staged by slug and re-keyed to production's city ids, since `city_id`
+  UUIDs differ per database — the SS5 lesson) with `ON CONFLICT DO
+  NOTHING`. Rehearsal from a simulated production state (33 / 424,911):
+  staged 156,863, inserted 156,863, ended 80 / 581,774; rolled back.
+- [x] **Rollback** `supabase/self-host/rollback_008_cities.sql` rehearsed
+  the same way → 33 cities / 424,911 spots; rolled back.
+- [ ] **Production:** backup, then run the transfer; verify counts and
+  `/health/db`; check Cottbus in the app.
