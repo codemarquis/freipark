@@ -266,7 +266,7 @@ describe('spot reports', () => {
 
   it('shows the latest active report with its age', async () => {
     await renderSheet({ ...BASE, report_status: 'full', report_at: minutesAgo(4) });
-    expect(screen.getByText('Reported full · 4 min ago')).toBeTruthy();
+    expect(screen.getByText('Reported occupied · 4 min ago')).toBeTruthy();
   });
 
   it('says "just now" for a report under a minute old', async () => {
@@ -295,7 +295,7 @@ describe('spot reports', () => {
       fireEvent.press(screen.getByText('mock report free'));
     });
     expect(screen.getByText('Reported free · just now')).toBeTruthy();
-    expect(screen.queryByText('Reported full · 12 min ago')).toBeNull();
+    expect(screen.queryByText('Reported occupied · 12 min ago')).toBeNull();
     expect(onReported).toHaveBeenCalledTimes(1);
   });
 

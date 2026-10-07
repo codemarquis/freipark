@@ -33,7 +33,7 @@ expires 30 minutes later.
 
 | Decision | Choice |
 |---|---|
-| Report vocabulary | `free` / `full` for **every** spot type (street, lot, garage, zone). "Taken" was dropped — it's ambiguous for a 200-space lot. |
+| Report vocabulary | `free` / `full` for **every** spot type (street, lot, garage, zone). "Taken" was dropped — it's ambiguous for a 200-space lot. **UI label changed 2026-10-07:** the `full` button and status line read **"Occupied"** (DE "Belegt", TR "Dolu") — clearer for a single spot; the stored value stays `full`, so no database or API change. |
 | Lifetime | 30 minutes from `reported_at`, all spot types |
 | Display | Detail-sheet status line **and** a marker ring on spots with an active report |
 | Anti-abuse | DB-enforced rate limits **and** a proximity check against the reporter's device location: 150 m for `street`, 300 m for `lot` / `garage` / `zone` (their centroid can be far from the entrance) |

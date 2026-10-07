@@ -53,8 +53,8 @@ geocoding service) to find matching places. See § 4 below.
 
 ### Spot reports
 If you're signed in, you can report whether a parking spot has space
-("free") or is full. Other users see that a spot was reported free or
-full and how long ago — **never who reported it**.
+("free") or is occupied. Other users see that a spot was reported free or
+occupied and how long ago — **never who reported it**.
 
 When you send a report, the app reads your current location once and
 sends it to our server, which checks you're within 150 m of a street
@@ -62,7 +62,7 @@ spot (300 m for car parks and zones). **Your coordinates are not
 stored.** We store:
 - your account ID
 - the spot
-- the report ("free" or "full") and when you made it
+- the report ("free" or "occupied") and when you made it
 - your distance from the spot at that moment (in metres)
 
 Reports are shown for 30 minutes and deleted after

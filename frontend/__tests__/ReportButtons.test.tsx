@@ -62,14 +62,14 @@ describe('ReportButtons', () => {
   it('shows both report buttons with accessible labels', async () => {
     await renderButtons();
     expect(screen.getByRole('button', { name: 'Report: space free' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Report: full' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Report: occupied' })).toBeTruthy();
     expect(screen.getByText('Space free')).toBeTruthy();
-    expect(screen.getByText('Full')).toBeTruthy();
+    expect(screen.getByText('Occupied')).toBeTruthy();
   });
 
   it.each([
     ['Space free', 'free'],
-    ['Full', 'full'],
+    ['Occupied', 'full'],
   ] as const)('tapping %s submits %s and reports success', async (label, status) => {
     await renderButtons();
     await act(async () => {
@@ -94,7 +94,7 @@ describe('ReportButtons', () => {
     submit.mockResolvedValue({ ok: false, error: 'busy' });
     await renderButtons();
     await act(async () => {
-      fireEvent.press(screen.getByText('Full'));
+      fireEvent.press(screen.getByText('Occupied'));
     });
     expect(onReported).not.toHaveBeenCalled();
     expect(onSignInRequired).not.toHaveBeenCalled();
@@ -114,7 +114,7 @@ describe('ReportButtons', () => {
     hookState({ submitting: true });
     await renderButtons();
     expect(screen.getByTestId('report-submitting')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Report: full' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Report: occupied' })).toBeDisabled();
   });
 
   it.each([
@@ -143,6 +143,13 @@ describe('report translations', () => {
     expect(keys(en).length).toBeGreaterThan(0);
     expect(keys(de)).toEqual(keys(en));
     expect(keys(tr)).toEqual(keys(en));
+  });
+
+  // The stored value stays 'full'; only the label says "occupied".
+  it('labels the full report as "occupied" in each language', () => {
+    expect(en.report.full).toBe('Occupied');
+    expect(de.report.full).toBe('Belegt');
+    expect(tr.report.full).toBe('Dolu');
   });
 
   it('has no empty report strings', () => {
