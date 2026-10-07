@@ -1731,3 +1731,142 @@ features become spots.
   305 skipped, 0 inserted, rule still holds (3,327 → 3,036 real spots).
 - [ ] **Production:** apply `009` (ask first). Then `/health/db` should
   show 547,590 spots.
+
+---
+
+# Implementation Plan: spot-address module
+
+**Spec:** [SPEC-spot-address.md](../SPEC-spot-address.md) (approved 2026-10-07)
+**Module:** `spot-address`
+**Build position:** after `spot-reports`; depends on `infra` (import,
+`parking_spots`) and `map` (sheet, share message).
+
+> **Status (2026-10-07):** planned, nothing built.
+
+## Dependency Graph
+
+```
+DB + import (local stack only)
+[SA1] migration 010 + spot_details ──→ [SA2] row-level rules 1–2 ──→ [SA3] spatial rules 3–4
+                                                                            │
+                                                                     [SA4] local backfill (80 cities)
+Frontend                                                                    │
+[SA5] address formatting + translations ──→ [SA6] sheet + share + fetch     │
+                                                  │                         │
+                                   ── Checkpoint SC1: simulator, local stack ──
+                                                  │
+                                   [SA7] production: 010 + address copy (ask first;
+                                         requires 009 on production first)
+```
+
+- SA1 → SA2 → SA3 → SA4 are sequential (same tables/importer).
+- SA5 needs only the agreed `spot_details` shape, so it can run in
+  parallel with SA2–SA4.
+- SA7 is the only production task; `009` must already be applied there
+  (its columns don't conflict, but the spec orders `010` after `009`).
+
+## Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Upsert wipes nearest-rule addresses when a city is re-imported | High if forgotten | The address step always runs after the upsert for that city and recomputes all rules; SA3 test re-runs the import step and checks results are stable |
+| Address step slows big-city imports | Medium | Measured 5.9 s for Berlin; criterion ≤ 30 s; temp tables with GiST, one `UPDATE` |
+| Nearest address belongs to a building on a parallel street | Medium, by design | Shown as "near …"; 60 m cap; rules 1–2 win when the spot itself knows |
+| `NULL` traps in SQL (the `009` lesson) | Medium | Tests cover spots with no tags, no name, nothing within 60 m |
+| City-states (Berlin/Hamburg/Bremen) use the whole-state PBF — larger address extracts | Low | Berlin measured: 451,778 points loaded in 10 s |
+| Production copy keyed wrongly (the SS5 lesson) | Medium | Key by `(osm_id, osm_type)`, never `id`/`city_id`; rehearse locally against a simulated production state, as with `008` |
+
+## Tasks
+
+### SA1 — Migration `010` and `spot_details`
+
+- [ ] **SA1: `supabase/migrations/010_spot_address.sql` + DB tests**
+  - Five nullable columns with the `address_source` CHECK; `spot_details(uuid)`
+    (STABLE, SECURITY DEFINER, `SET search_path = public, extensions, pg_temp`,
+    EXECUTE to `anon`, `authenticated`) returning the address fields + `cities.name`
+  - Acceptance: applies after `009`, re-run safe; `spot_details` works for
+    `anon`, returns NULL fields for a spot with no address, no row for an
+    unknown id; CHECK rejects an unknown source; `spots_in_bbox` unchanged
+  - Verify: `FREIPARK_DB_WRITE_TESTS=1 pytest tests/test_spot_address.py`; full suite
+  - Files: `supabase/migrations/010_spot_address.sql`, `backend/tests/test_spot_address.py`
+
+### SA2 — Importer: rules 1–2 at row level
+
+- [ ] **SA2: own address tags and street-way name in `_feature_to_row`; upsert writes the columns**
+  - Rule 1: `addr:street` (+ `addr:housenumber`, `addr:postcode`) → `own_tags`, distance 0;
+    a street without a number still counts
+  - Rule 2: `street` spot with `name` → `street_name`, distance 0
+  - Otherwise all five fields NULL (rules 3–4 fill them in SA3)
+  - Acceptance: unit tests for each rule, partial tags, and a lot with only `name` (a car park's
+    name is not an address → NULL)
+  - Verify: `pytest tests/test_import_osm.py`
+  - Files: `backend/scripts/import_osm.py`, `backend/tests/test_import_osm.py`
+
+### SA3 — Importer: rules 3–4 (spatial)
+
+- [ ] **SA3: address step after the upsert**
+  - Extract address points (`nwr/addr:housenumber`) and named, car-usable streets
+    (`w/highway`, excluding footway, path, cycleway, steps, bridleway, track, corridor,
+    pedestrian-only platforms) from the same clipped PBF; load into temp tables with GiST
+  - One `UPDATE` for this city's spots where `address_source` is NULL or a nearest rule:
+    nearest address point ≤ 60 m, else nearest named street ≤ 60 m, else NULL; rules 1–2 never
+    overwritten
+  - Log counts per `address_source`; temp tables dropped
+  - Acceptance (DB tests on fixtures, rolled back): nearest wins; 61 m → no address;
+    footway ignored; own tags kept; running the step twice gives the same result
+  - Verify: `FREIPARK_DB_WRITE_TESTS=1 pytest`; re-import Berlin locally and time it
+  - Files: `backend/scripts/import_osm.py`, `backend/tests/test_spot_address.py`
+
+### SA4 — Local backfill
+
+- [ ] **SA4: re-run `import_all.py` for all 80 cities locally**
+  - Acceptance: Berlin ≥ 95% with an address (measured 97.9%); per-source counts logged for
+    every city; Berlin import grows ≤ 30 s; `test_every_spot_is_car_parking` still passes
+  - Verify: SQL coverage report per city, recorded here
+  - Files: none (data only)
+
+### SA5 — Address formatting and translations
+
+- [ ] **SA5: `features/map/spotAddress.ts` + keys in de/en/tr**
+  - `formatAddress(details, t)`: "Oranienstraße 12, 10997 Berlin" for `own_tags`;
+    street + city for `street_name`; "near …" for `nearest_address` / `nearest_street`;
+    null when there's no street. `formatCoords(lat, lon)` → `52.50562, 13.39693`
+    (shared with `shareSpot.ts`)
+  - Acceptance: unit tests for every source, missing number/postcode, DE "bei …",
+    TR "… yakınında"; key parity across locales
+  - Verify: `npx jest spotAddress`
+  - Files: `frontend/src/features/map/spotAddress.ts`, `frontend/__tests__/spotAddress.test.ts`,
+    `frontend/src/i18n/locales/{de,en,tr}.json`
+
+### SA6 — Sheet, share message, fetching
+
+- [ ] **SA6: `useSpotDetails` + coordinates/address in `SpotDetailSheet` + address in the share message**
+  - Hook calls `spot_details` when the sheet opens for a spot; ignores stale responses when
+    the user taps another spot; errors → no address line
+  - Sheet: coordinates immediately, address when loaded; share message gains the address line
+  - Acceptance: tests for immediate coordinates, address after load, stale response ignored,
+    error path, share message with and without address
+  - Verify: `npx jest`; `npx tsc --noEmit`
+  - Files: `frontend/src/features/map/useSpotDetails.ts`, `frontend/__tests__/useSpotDetails.test.ts`,
+    `frontend/src/features/map/SpotDetailSheet.tsx`, `frontend/src/features/map/shareSpot.ts`,
+    `frontend/__tests__/SpotDetailSheet.test.tsx`, `frontend/__tests__/shareSpot.test.ts`
+    (6 files — one over the guideline, because the share message is part of the same change)
+
+### Checkpoint SC1 — simulator against the local stack
+
+- [ ] **SC1:** `c1.env` setup from C1. A Berlin car park shows "near …" + coordinates; a
+  street spot (another city) shows its street name; a spot with no address shows only
+  coordinates; the share sheet text includes the address. Check the sheet's first snap
+  height now that it has two more lines (and the Share button from earlier).
+
+### SA7 — Production (ask first)
+
+- [ ] **SA7: apply `010`, copy the address columns, verify**
+  - Precondition: `009` applied on production
+  - Order: fresh backup → `010` → staged copy of the five columns keyed by
+    `(osm_id, osm_type)` in one transaction (rehearsed locally against a simulated
+    production state first) → per-source counts match local → `spot_details` via the
+    public API for a Berlin spot
+  - Rollback: `DROP FUNCTION spot_details` + drop the five columns (written and tested
+    before step 2)
+  - Files: rollback SQL + notes here
