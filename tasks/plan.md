@@ -1780,7 +1780,13 @@ Frontend                                                                    │
 
 ### SA1 — Migration `010` and `spot_details`
 
-- [ ] **SA1: `supabase/migrations/010_spot_address.sql` + DB tests**
+- [x] **SA1: `supabase/migrations/010_spot_address.sql` + DB tests — done 2026-10-07, local only.**
+  6 DB tests written first (all errored: columns missing), then passing;
+  backend suite 80/80. `010` applied locally twice (re-run safe: `ADD
+  COLUMN IF NOT EXISTS`, constraint dropped and re-added, `CREATE OR
+  REPLACE`). Anonymous call through local Kong returns
+  `[{address_*: null, city_name: "Cottbus"}]` — addresses arrive with
+  SA2–SA4.
   - Five nullable columns with the `address_source` CHECK; `spot_details(uuid)`
     (STABLE, SECURITY DEFINER, `SET search_path = public, extensions, pg_temp`,
     EXECUTE to `anon`, `authenticated`) returning the address fields + `cities.name`
