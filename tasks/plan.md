@@ -1980,3 +1980,85 @@ Frontend                                                                    │
   - Rollback: `DROP FUNCTION spot_details` + drop the five columns (written and tested
     before step 2)
   - Files: rollback SQL + notes here
+
+---
+
+# Implementation Plan: settings module
+
+**Spec:** [SPEC-settings.md](../SPEC-settings.md) (approved 2026-10-08)
+**Module:** `settings`
+**Build position:** after `spot-address`; depends on `auth` and i18n. Frontend only.
+
+> **Status (2026-10-08):** planned, nothing built.
+
+## Dependency Graph
+
+```
+[ST1] translations ──→ [ST2] SettingsSheet ──┐
+                                              ├──→ [ST4] SettingsButton + MapScreen wiring
+[ST3] AuthSheet → sign-in only ──────────────┘                │
+                                                   ── Checkpoint STC1: simulator ──
+```
+
+- ST2 and ST3 are independent of each other; both need ST1's keys.
+- ST4 swaps `AccountButton` for `SettingsButton` and collapses the two
+  `AuthSheet` instances into one — last, so nothing is half-wired.
+
+## Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Account actions change behaviour while moving | Medium | ST2 moves the sign-out/delete handlers verbatim; ST2's tests mirror the existing `AuthSheet` account tests before ST3 deletes them |
+| Two bottom sheets open at once (Settings + sign-in) | Medium | Settings closes before opening the sign-in sheet; checked in STC1 |
+| `⚙︎` renders as a colour emoji on some iOS versions | Low | Text-variation selector (U+FE0E); checked on the simulator |
+| German labels overflow the 76 px button | Low | Button shows only the gear; label is accessibility-only |
+
+## Tasks
+
+### ST1 — Translations
+
+- [ ] **ST1: `settings.*` keys in de/en/tr**
+  - `settings.title`, `settings.account`, `settings.language`, `settings.signInOrCreate`, `settings.a11y`
+  - Acceptance: key-parity test across the three locales; no empty strings
+  - Verify: `npx jest`
+  - Files: `frontend/src/i18n/locales/{de,en,tr}.json`, `frontend/__tests__/settingsTranslations.test.ts`
+
+### ST2 — `SettingsSheet`
+
+- [ ] **ST2: `src/features/settings/SettingsSheet.tsx`**
+  - Account: signed out → "Sign in or create account" calls `onSignInRequested`; signed in →
+    email, Sign out, Delete account (confirm dialog), handlers and error text moved verbatim from
+    `AuthSheet`
+  - Language: DE/EN/TR pills calling `setLanguage`, current one highlighted
+  - Acceptance: tests for both account states, sign-out success/error, delete confirm/cancel/error,
+    language switch and highlight
+  - Verify: `npx jest SettingsSheet`; `npx tsc --noEmit`
+  - Files: `frontend/src/features/settings/SettingsSheet.tsx`, `frontend/__tests__/SettingsSheet.test.tsx`
+
+### ST3 — `AuthSheet` becomes sign-in only
+
+- [ ] **ST3: remove the language row and the signed-in block from `AuthSheet`**
+  - Delete the moved handlers and their now-unused styles; tests for the removed parts move to ST2's
+    file (already written there)
+  - Acceptance: no language pills and no Sign out/Delete in `AuthSheet`; all sign-in, sign-up and
+    OTP tests unchanged and passing
+  - Verify: `npx jest AuthSheet`; `npx tsc --noEmit`
+  - Files: `frontend/src/features/auth/AuthSheet.tsx`, `frontend/__tests__/AuthSheet.test.tsx`
+
+### ST4 — `SettingsButton` and wiring
+
+- [ ] **ST4: `SettingsButton` replaces `AccountButton`; one screen-level `AuthSheet`**
+  - `SettingsButton` (`⚙︎`, a11y label) opens `SettingsSheet`; Settings' "Sign in" closes Settings and
+    opens the shared `AuthSheet`; the report buttons use the same instance
+  - `AccountButton.tsx` deleted (its only use is `MapScreen`)
+  - Acceptance: button test (label, opens sheet); full suite green
+  - Verify: `npx jest`; `npx tsc --noEmit`
+  - Files: `frontend/src/features/settings/SettingsButton.tsx`, `frontend/__tests__/SettingsButton.test.tsx`,
+    `frontend/src/features/map/MapScreen.tsx`, `frontend/src/features/auth/AccountButton.tsx` (deleted)
+
+### Checkpoint STC1 — simulator
+
+- [ ] **STC1:** gear renders as a monochrome symbol; Settings opens; signed out → "Sign in or create
+  account" → sign-in sheet (and only one sheet visible); signed in (session injected as in C1) →
+  email, Sign out works; language switch updates the whole UI and survives an app restart; report
+  buttons still open the sign-in sheet when signed out.
