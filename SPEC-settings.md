@@ -2,7 +2,7 @@
 
 **Module:** `settings`
 **Capability map:** [CLAUDE.md](CLAUDE.md) → after `spot-address`. Depends on `auth` (`useAuth`, `AuthSheet`) and the i18n setup. No backend or database changes.
-**Status:** Approved 2026-10-08 (open-question defaults accepted) — tasks in `tasks/plan.md` § Implementation Plan: settings.
+**Status:** Implemented 2026-10-08 (ST1–ST4, checked on the simulator in STC1; success criteria 1–5 met). Not yet in a released app build.
 
 ---
 

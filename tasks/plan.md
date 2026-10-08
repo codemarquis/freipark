@@ -1989,7 +1989,7 @@ Frontend                                                                    │
 **Module:** `settings`
 **Build position:** after `spot-address`; depends on `auth` and i18n. Frontend only.
 
-> **Status (2026-10-08):** ST1–ST4 built; simulator check (STC1) pending.
+> **Status (2026-10-08):** ST1–ST4 and STC1 done. Not yet in a released app build.
 
 ## Dependency Graph
 
@@ -2082,7 +2082,21 @@ Frontend                                                                    │
 
 ### Checkpoint STC1 — simulator
 
-- [ ] **STC1:** gear renders as a monochrome symbol; Settings opens; signed out → "Sign in or create
+- [x] **STC1 — done 2026-10-08** (simulator, local stack, `idb`):
+  - ⚙︎ renders as a plain dark symbol in a white pill (not a colour emoji).
+  - Settings opens: title, Account ("Sign in or create account" when
+    signed out), Language (DE / EN / TR, current highlighted).
+  - DE switches the **whole app** at once (search bar too: "In
+    Deutschland suchen…") and **survives a full app restart**.
+  - "Anmelden oder Konto erstellen" closes Settings and opens the sign-in
+    sheet — only one sheet visible; the sign-in sheet has no language row.
+  - Signed in (local-only test user, session injected as in C1): Settings
+    shows the email, "Abmelden", "Konto löschen" (red); "Abmelden" signs
+    out and closes; reopening shows the signed-out state.
+  - Report buttons, signed out: "Space free" opens the same sign-in sheet.
+  - Cleanup: language set back to EN; test user deleted; Metro stopped;
+    simulator shut down.
+  *(Original checklist follows.)* gear renders as a monochrome symbol; Settings opens; signed out → "Sign in or create
   account" → sign-in sheet (and only one sheet visible); signed in (session injected as in C1) →
   email, Sign out works; language switch updates the whole UI and survives an app restart; report
   buttons still open the sign-in sheet when signed out.
