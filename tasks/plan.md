@@ -1945,7 +1945,18 @@ Frontend                                                                    │
 
 ### SA7 — Production (ask first)
 
-- [ ] **SA7: apply `010`, copy the address columns, verify**
+- [ ] **SA7: apply `010`, copy the address columns, verify** — *prepared and rehearsed 2026-10-08; not yet run on production.*
+  - `supabase/self-host/rollback_010_spot_address.sql` rehearsed locally in
+    a rolled-back transaction: `spot_details` and all 5 columns gone,
+    547,590 spots kept, `spots_in_bbox` still works.
+  - Address transfer (one transaction, 500,108 rows keyed by
+    `(osm_id, osm_type)`, 6.4 MB gzipped) rehearsed from a simulated
+    post-`010` state (all addresses NULL): staged 500,108, updated
+    500,108, per source identical to local, 547,590 spots. **Abort path
+    rehearsed too:** with one expected spot missing it raises
+    `aborting: 1 staged addresses have no matching spot` and changes
+    nothing.
+  - Precondition: `009` on production first — both go in the schema step.
   - Precondition: `009` applied on production
   - Order: fresh backup → `010` → staged copy of the five columns keyed by
     `(osm_id, osm_type)` in one transaction (rehearsed locally against a simulated
