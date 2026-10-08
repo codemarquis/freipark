@@ -43,9 +43,12 @@ SERVICES = (("roadworks", "roadworks"), ("closure", "closure"))  # (path, respon
 # End-date formats seen in real descriptions (German local time):
 #   "Ende: 21.10.26 um 16:00 Uhr"            end of the current phase
 #   "12.10.26 von 10:00 bis 16:00 Uhr"       short-term windows → the latest "bis"
+#   "08.10.26 21:00 bis zum 09.10.26 05:00"  a window crossing midnight → its second date
 #   "(Ende der Gesamtmaßnahme: 09.10.26)"    whole project, date only → 23:59
 _PHASE_END = re.compile(r"Ende:\s*(\d{2})\.(\d{2})\.(\d{2})(?:\s+um\s+(\d{1,2}):(\d{2}))?")
 _WINDOW = re.compile(r"(\d{2})\.(\d{2})\.(\d{2})\s+von\s+\d{1,2}:\d{2}\s+bis\s+(\d{1,2}):(\d{2})")
+_OVERNIGHT = re.compile(
+    r"\d{2}\.\d{2}\.\d{2}\s+\d{1,2}:\d{2}\s+bis\s+(?:zum\s+)?(\d{2})\.(\d{2})\.(\d{2})\s+(\d{1,2}):(\d{2})")
 _PROJECT_END = re.compile(r"Ende der Gesamtmaßnahme:\s*(\d{2})\.(\d{2})\.(\d{2})")
 
 
@@ -68,7 +71,8 @@ def parse_end(description: list[str]) -> datetime | None:
         m = _PHASE_END.search(line)
         if m:
             return _local(*m.groups())
-    windows = [w for line in description for d, mo, y, h, mi in _WINDOW.findall(line)
+    windows = [w for line in description for pattern in (_WINDOW, _OVERNIGHT)
+               for d, mo, y, h, mi in pattern.findall(line)
                if (w := _local(d, mo, y, h, mi)) is not None]
     if windows:
         return max(windows)

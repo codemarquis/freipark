@@ -98,6 +98,13 @@ def test_winter_dates_use_central_european_time():
     assert fa.parse_end(["Ende: 15.01.27 um 08:00 Uhr"]).utcoffset().total_seconds() == 3600
 
 
+def test_a_window_crossing_midnight_ends_at_its_second_date():
+    # Seen in the live API (A100 closure): "08.10.26 21:00 bis zum 09.10.26 05:00 Uhr".
+    lines = ["Die Baustelle ist zu folgenden Zeiträumen gültig:", "08.10.26 21:00 bis zum 09.10.26 05:00 Uhr.",
+             "(Ende der Gesamtmaßnahme: 09.10.26)"]
+    assert fa.parse_end(lines) == datetime(2026, 10, 9, 5, 0, tzinfo=BERLIN)
+
+
 def test_24_00_means_midnight_at_the_start_of_the_next_day():
     # Seen in the live API: "bis 24:00 Uhr". datetime() rejects hour 24.
     assert fa.parse_end(["12.10.26 von 22:00 bis 24:00 Uhr"]) == datetime(2026, 10, 13, 0, 0, tzinfo=BERLIN)

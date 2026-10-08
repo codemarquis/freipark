@@ -2289,8 +2289,19 @@ App
 
 ### Checkpoint RCC1 — simulator, local stack
 
-- [ ] **RCC1:** A100 roadworks visible in Berlin with the right colour; tap → sheet; a closure and an
+- [x] **RCC1:** A100 roadworks visible in Berlin with the right colour; tap → sheet; a closure and an
   OSM construction way look distinct; spot taps unaffected; nothing drawn below zoom 9.
+  **Done 2026-10-08 (iPhone 17 Pro simulator, local stack):** A100 closures solid red, ramp closures
+  dashed red, roadworks orange, OSM construction grey dotted (central Berlin). Line taps open
+  `RoadEventSheet` with the type, title, direction, "until …", description and source credit; spot
+  taps still open the spot sheet with its address. Not seen on screen: the zoom < 9 cut-off and a
+  spot sitting on a line (the simulator can't pinch-zoom, and no spot overlapped a line near the
+  A100); both rest on the layer `minzoom`, the fetch guard tests and the tap-precedence logic.
+  The first two line taps after a Fast Refresh opened nothing; after a full restart the first tap
+  worked and it couldn't be reproduced (likely a missed tap). Watch for it in the preview build.
+  **Found:** "08.10.26 21:00 bis zum 09.10.26 05:00 Uhr" wasn't parsed, so the sheet showed the
+  project end (09.10 23:59) instead of 05:00; `parse_end` now reads it (test added). Backend 196/196,
+  frontend 236/236, `tsc` clean.
 
 ### RC7 — Production (ask first)
 

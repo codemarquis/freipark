@@ -100,7 +100,9 @@ it up):
    apart, honest `User-Agent`, per-request timeout, failures counted not
    fatal.
 3. Map `display_type` → `kind`; parse an end date from the description
-   when present ("Ende: 21.10.26 um 16:00 Uhr"), else NULL.
+   when present ("Ende: 21.10.26 um 16:00 Uhr", time windows such as
+   "12.10.26 von 10:00 bis 16:00 Uhr" or "08.10.26 21:00 bis zum
+   09.10.26 05:00 Uhr", else the whole project's end date), else NULL.
 4. Upsert by `(source, source_id)` in one transaction.
 5. **Delete Autobahn rows not seen in this sweep — only if ≥ 95% of
    requests succeeded.** An API outage must not wipe the map.
