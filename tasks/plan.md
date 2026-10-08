@@ -2046,7 +2046,15 @@ Frontend                                                                    │
 
 ### ST3 — `AuthSheet` becomes sign-in only
 
-- [ ] **ST3: remove the language row and the signed-in block from `AuthSheet`**
+- [x] **ST3: remove the language row and the signed-in block from `AuthSheet` — done 2026-10-08.**
+  Tests first: the 4 tests for the moved parts (signed in ×2, language
+  ×2) replaced by 2 "sign-in only" tests (no language buttons; no
+  Sign Out / Delete / email even when signed in), which failed, then
+  passed. Removed: language row, signed-in branch, `handleSignOut`,
+  `handleDeleteAccount`, unused imports (`Alert`, i18n helpers) and 8
+  unused styles; the now-redundant fragment unwrapped (diff looks big
+  from a 2-space dedent; net −154 lines). All 17 sign-in / sign-up / OTP
+  tests unchanged and passing. Frontend 211/211, `tsc` clean.
   - Delete the moved handlers and their now-unused styles; tests for the removed parts move to ST2's
     file (already written there)
   - Acceptance: no language pills and no Sign out/Delete in `AuthSheet`; all sign-in, sign-up and

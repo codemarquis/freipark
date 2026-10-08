@@ -319,49 +319,21 @@ describe('phone auth', () => {
   });
 });
 
-describe('signed in', () => {
-  it('shows the account email and a Sign Out button', async () => {
+// Account (sign out, delete) and the language switch moved to Settings
+// (SPEC-settings.md); their tests are in SettingsSheet.test.tsx.
+describe('sign-in only', () => {
+  it('has no language buttons', async () => {
+    await render(<AuthSheet visible={true} onClose={onClose} />);
+    for (const label of ['DE', 'EN', 'TR']) {
+      expect(screen.queryByText(label)).toBeNull();
+    }
+  });
+
+  it('shows no account actions, even when someone is signed in', async () => {
     mockSignedIn('me@example.com');
     await render(<AuthSheet visible={true} onClose={onClose} />);
-
-    expect(screen.getByText('me@example.com')).toBeTruthy();
-    expect(screen.getByText('Sign Out')).toBeTruthy();
-  });
-
-  it('calls signOut and closes the sheet', async () => {
-    mockSignedIn();
-    signOut.mockResolvedValue({ error: null });
-    await render(<AuthSheet visible={true} onClose={onClose} />);
-
-    await fireEvent.press(screen.getByText('Sign Out'));
-
-    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-  });
-});
-
-describe('language switcher', () => {
-  it('shows a pill for each supported language, English active by default', async () => {
-    await render(<AuthSheet visible={true} onClose={onClose} />);
-
-    expect(screen.getByText('DE')).toBeTruthy();
-    expect(screen.getByText('EN')).toBeTruthy();
-    expect(screen.getByText('TR')).toBeTruthy();
-  });
-
-  it('switches every translated string on the screen when a pill is tapped', async () => {
-    await render(<AuthSheet visible={true} onClose={onClose} />);
-
-    expect(screen.getByText('Sign In')).toBeTruthy();
-
-    await fireEvent.press(screen.getByText('DE'));
-
-    await waitFor(() => expect(screen.getByText('Anmelden')).toBeTruthy());
-    expect(screen.queryByText('Sign In')).toBeNull();
-
-    // Switching back to English (i18next is a shared singleton, so later
-    // suites shouldn't inherit German from this one).
-    await fireEvent.press(screen.getByText('EN'));
-    await waitFor(() => expect(screen.getByText('Sign In')).toBeTruthy());
+    expect(screen.queryByText('Sign Out')).toBeNull();
+    expect(screen.queryByText('Delete Account')).toBeNull();
+    expect(screen.queryByText('me@example.com')).toBeNull();
   });
 });
