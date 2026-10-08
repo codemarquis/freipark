@@ -2166,7 +2166,22 @@ App
 
 ### RC2 — Autobahn fetcher
 
-- [ ] **RC2: `backend/scripts/fetch_autobahn.py`**
+- [x] **RC2: `backend/scripts/fetch_autobahn.py` — done 2026-10-08, not yet run against the live API (RC3).**
+  Fixture: one real item per type captured from the API (5 KB, geometry
+  trimmed). End dates come in three formats, all parsed in German local
+  time (CET/CEST): phase end "Ende: 21.10.26 um 16:00 Uhr"; short-term
+  windows "12.10.26 von 10:00 bis 16:00 Uhr" (latest "bis" wins); and
+  project end "(Ende der Gesamtmaßnahme: 09.10.26)" (date only → 23:59).
+  26 tests written first (module missing), then all passing: kinds for
+  all four types, unknown/malformed skipped, end-date formats incl.
+  winter time, road-name trim/dedupe, sweep via mocked HTTP (dedupe,
+  failures counted), upsert, update-in-place, stale removal after a
+  97.5% sweep, **nothing removed after a 94.5% sweep**, empty sweep
+  removes nothing, OSM rows untouched.
+  **Mutation check:** lowering the guard to 90% made the poor-sweep test
+  fail, as it should. (Restoring it within the same second left a stale
+  `.pyc` — same size and mtime — so the next run still saw 0.90;
+  clearing `__pycache__` fixed it. Not a code issue.) Backend 150/150.
   - Pure parser (`display_type` → kind; end-date from description; trim/dedupe roads; skip
     malformed) + sweep (httpx, 0.2 s spacing, timeouts, UA) + one-transaction upsert + guarded
     stale-row removal (≥ 95% success) + per-kind log

@@ -1,0 +1,295 @@
+{
+ "ROADWORKS": {
+  "road": "A100",
+  "item": {
+   "identifier": "2026-051441--vi-bs.2026-10-08_12-00-00-000.devi-zus.2026-10-08_12-00-00-000_001.de8",
+   "icon": "123",
+   "isBlocked": "false",
+   "future": false,
+   "extent": "52.533956200255844,13.297326791106588,52.53111857355118,13.284787578390185",
+   "point": "52.533956200255844,13.297326791106588",
+   "startLcPosition": "1",
+   "impact": {
+    "lower": "Spandauer Damm",
+    "upper": "Beusselstraße",
+    "symbols": [
+     "SEPARATE",
+     "ARROW_UP",
+     "CLOSED"
+    ]
+   },
+   "display_type": "ROADWORKS",
+   "subtitle": " Wedding -> Wilmersdorf",
+   "title": "A100 | Beusselstraße - Spandauer Damm",
+   "startTimestamp": "2026-10-08T12:00:00+02:00",
+   "coordinate": {
+    "lat": 52.533956200255844,
+    "long": 13.297326791106588
+   },
+   "description": [
+    "Zeitraum dieser Bauphase:",
+    "Beginn: 08.10.26 um 12:00 Uhr",
+    "Ende: 21.10.26 um 16:00 Uhr",
+    "(Ende der Gesamtmaßnahme: 21.10.26)",
+    "",
+    "A100: Wedding -> Wilmersdorf, zwischen 2.0 km hinter AS Beusselstraße und 1.5 km vor AS Spandauer Damm",
+    "",
+    "Länge: 0.94 km | Max. 60 km/h | Maximale Durchfahrtsbreite: 3 m",
+    "",
+    "A100 Rudolf-Wissell-Brücke - Bauwerksarbeiten"
+   ],
+   "routeRecommendation": [],
+   "footer": [],
+   "lorryParkingFeatureIcons": [],
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.297326791,
+      52.5339562
+     ],
+     [
+      13.2971623,
+      52.533938201
+     ],
+     [
+      13.2967282,
+      52.533894801
+     ],
+     [
+      13.2957486,
+      52.533811701
+     ],
+     [
+      13.2950149,
+      52.533760101
+     ],
+     [
+      13.294427,
+      52.533730001
+     ]
+    ]
+   }
+  }
+ },
+ "SHORT_TERM_ROADWORKS": {
+  "road": "A100",
+  "item": {
+   "identifier": "2026-027353--vi-fbm.2026-10-12_10-00-00-000.devi-zus.2026-06-01_00-00-00-000_007.de106",
+   "icon": "warnkegel",
+   "isBlocked": "false",
+   "future": true,
+   "extent": "52.470234194585515,13.375565390757918,52.47605793920741,13.347939288994134",
+   "point": "52.470234194585515,13.375565390757918",
+   "startLcPosition": "21",
+   "impact": {
+    "lower": "Innsbrucker Platz",
+    "upper": "Tempelhofer Damm",
+    "symbols": [
+     "SEPARATE",
+     "CLOSED",
+     "ARROW_UP"
+    ]
+   },
+   "display_type": "SHORT_TERM_ROADWORKS",
+   "subtitle": " Neukölln -> Wilmersdorf",
+   "title": "A100 | Tempelhofer Damm - Innsbrucker Platz",
+   "coordinate": {
+    "lat": 52.470234194585515,
+    "long": 13.375565390757918
+   },
+   "description": [
+    "Die Baustelle ist zu folgenden Zeiträumen gültig:",
+    "12.10.26 von 10:00 bis 16:00 Uhr",
+    "",
+    "A100: Neukölln -> Wilmersdorf, zwischen 0.7 km hinter AS Tempelhofer Damm und 0.4 km vor AS Innsbrucker Platz",
+    "",
+    "Länge: 2.1 km | Maximale Durchfahrtsbreite: 3 m",
+    "",
+    "A100, Fahrbahninstandsetzung zwischen AS Innsbrucker Platz und AS Alboinstraße (km 12,5-14,7), beide FR"
+   ],
+   "routeRecommendation": [],
+   "footer": [],
+   "lorryParkingFeatureIcons": [],
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.375565391,
+      52.470234195
+     ],
+     [
+      13.3748549,
+      52.470304701
+     ],
+     [
+      13.373947,
+      52.470409801
+     ],
+     [
+      13.372593,
+      52.470618501
+     ],
+     [
+      13.3703759,
+      52.471051601
+     ],
+     [
+      13.369871,
+      52.471153001
+     ]
+    ]
+   }
+  }
+ },
+ "CLOSURE": {
+  "road": "A100",
+  "item": {
+   "identifier": "2026-025450--vi-fbm.2026-10-05_21-00-00-000.devi-zus.2026-06-08_21-00-00-000_002.de9",
+   "icon": "250",
+   "isBlocked": "false",
+   "future": false,
+   "extent": "52.53387798809197,13.296529998824218,52.48749883815002,13.3005688653879",
+   "point": "52.53387798809197,13.296529998824218",
+   "startLcPosition": "1",
+   "impact": {
+    "lower": "Schmargendorf",
+    "upper": "Beusselstraße",
+    "symbols": [
+     "CLOSED",
+     "BORDER_LEFT",
+     "CLOSED",
+     "CLOSED",
+     "CLOSED",
+     "SEPARATE",
+     "CLOSED",
+     "CLOSED",
+     "BORDER_RIGHT",
+     "CLOSED"
+    ]
+   },
+   "display_type": "CLOSURE",
+   "subtitle": " Wedding -> Neukölln",
+   "title": "A100 | Beusselstraße - Schmargendorf",
+   "coordinate": {
+    "lat": 52.53387798809197,
+    "long": 13.296529998824218
+   },
+   "description": [
+    "Die Baustelle ist zu folgenden Zeiträumen gültig:",
+    "08.10.26 21:00 bis zum 09.10.26 05:00 Uhr.",
+    "(Ende der Gesamtmaßnahme: 09.10.26)",
+    "",
+    "A100: Wedding -> Neukölln, zwischen 2.1 km hinter AS Beusselstraße und 0.7 km vor AS Schmargendorf",
+    "",
+    "Länge: konnte nicht ermittelt werden",
+    "",
+    "A100 Tunnelwartung TRP"
+   ],
+   "routeRecommendation": [],
+   "footer": [],
+   "lorryParkingFeatureIcons": [],
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.296529999,
+      52.533877988
+     ],
+     [
+      13.2957486,
+      52.533811701
+     ],
+     [
+      13.2950149,
+      52.533760101
+     ],
+     [
+      13.294427,
+      52.533730001
+     ],
+     [
+      13.2935269,
+      52.533691001
+     ],
+     [
+      13.2929942,
+      52.533669901
+     ]
+    ]
+   }
+  }
+ },
+ "CLOSURE_ENTRY_EXIT": {
+  "road": "A100",
+  "item": {
+   "identifier": "2025-048987--vi-fbm.2026-10-05_05-00-00-000.devi-zus.2025-10-30_21-00-00-000_002.de70",
+   "icon": "448",
+   "isBlocked": "false",
+   "future": false,
+   "extent": "52.497223831542804,13.283161335563177,52.49802098559008,13.282214445433775",
+   "point": "52.497223831542804,13.283161335563177",
+   "startLcPosition": "10",
+   "impact": {
+    "lower": "Funkturm",
+    "upper": "Halenseestraße",
+    "symbols": [
+     "SEPARATE",
+     "CLOSED"
+    ]
+   },
+   "display_type": "CLOSURE_ENTRY_EXIT",
+   "subtitle": " Wilmersdorf -> Wedding",
+   "title": "A100 | Halenseestraße - Funkturm",
+   "startTimestamp": "2026-10-05T05:00:00+02:00",
+   "coordinate": {
+    "lat": 52.497223831542804,
+    "long": 13.283161335563177
+   },
+   "description": [
+    "Zeitraum dieser Bauphase:",
+    "Beginn: 05.10.26 um 05:00 Uhr",
+    "Ende: 31.12.26 um 12:00 Uhr",
+    "(Ende der Gesamtmaßnahme: 31.08.27)",
+    "",
+    "A100: Wilmersdorf -> Wedding, zwischen 0.3 km hinter AS Halenseestraße und 0.4 km vor AD Funkturm",
+    "",
+    "Länge: konnte nicht ermittelt werden",
+    "",
+    "A100 RiFa Hamburg Neubau Ringbahnbrücke und Westendbrücke"
+   ],
+   "routeRecommendation": [],
+   "footer": [],
+   "lorryParkingFeatureIcons": [],
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      13.283161336,
+      52.497223832
+     ],
+     [
+      13.2831161,
+      52.497267301
+     ],
+     [
+      13.2828464,
+      52.497500001
+     ],
+     [
+      13.2827603,
+      52.497573001
+     ],
+     [
+      13.2823175,
+      52.497921201
+     ],
+     [
+      13.282214445,
+      52.498020986
+     ]
+    ]
+   }
+  }
+ }
+}
