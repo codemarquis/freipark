@@ -93,7 +93,10 @@
     "account": "Account",
     "language": "Language",
     "signInOrCreate": "Sign in or create account",
-    "a11y": "Settings"
+    "a11y": "Settings",
+    "privacy": "Privacy",
+    "crashReports": "Crash reports",
+    "analytics": "Usage statistics"
   },
   "roadEvents": {
     "closure": "Road closed",
@@ -105,5 +108,12 @@
     "source": "Source: {{name}}",
     "sourceAutobahn": "Autobahn GmbH des Bundes",
     "sourceOsm": "OpenStreetMap"
+  },
+  "consent": {
+    "title": "Help improve FreiPark",
+    "body": "With your permission we send crash reports (Sentry) and usage statistics (PostHog), both hosted in the EU. Nothing is sent unless you allow it. You can change this any time in Settings.",
+    "allow": "Allow",
+    "deny": "Don't allow",
+    "privacyLink": "Privacy policy"
   }
 }

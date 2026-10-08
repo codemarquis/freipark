@@ -26,6 +26,10 @@ export const posthog =
   !isTestEnv && projectToken && host
     ? new PostHog(projectToken, {
         host,
+        // Opted out until the user allows usage statistics
+        // (features/consent, SPEC-analytics-consent.md); no request before then.
+        defaultOptIn: false,
+        preloadFeatureFlags: false,
         logs: {
           serviceName: 'freipark-mobile',
           environment: __DEV__ ? 'development' : 'production',

@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { SUPPORTED_LANGUAGES, setLanguage, type SupportedLanguage } from '../../i18n';
 import { useAuth } from '../auth/useAuth';
+import { loadConsent, saveConsent, type ConsentChoice } from '../consent/consent';
+
+// SPEC-analytics-consent.md: both off until the user turns them on.
+const CONSENT_ROWS: { key: keyof ConsentChoice; label: string }[] = [
+  { key: 'crashReports', label: 'settings.crashReports' },
+  { key: 'analytics', label: 'settings.analytics' },
+];
+const NO_CONSENT: ConsentChoice = { crashReports: false, analytics: false };
 
 const LANGUAGE_LABEL: Record<SupportedLanguage, string> = {
   de: 'DE',
@@ -12,7 +20,7 @@ const LANGUAGE_LABEL: Record<SupportedLanguage, string> = {
   tr: 'TR',
 };
 
-const SNAP_POINTS = ['45%'];
+const SNAP_POINTS = ['62%'];
 
 interface SettingsSheetProps {
   visible: boolean;
@@ -28,15 +36,25 @@ export function SettingsSheet({ visible, onClose, onSignInRequested }: SettingsS
   const { user, signOut, deleteAccount } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [choice, setChoice] = useState<ConsentChoice>(NO_CONSENT);
 
   useEffect(() => {
     if (visible) {
       setError(null);
       sheetRef.current?.snapToIndex(0);
+      loadConsent().then((consent) =>
+        setChoice(consent ? { crashReports: consent.crashReports, analytics: consent.analytics } : NO_CONSENT),
+      );
     } else {
       sheetRef.current?.close();
     }
   }, [visible]);
+
+  async function handleConsentChange(key: keyof ConsentChoice, value: boolean) {
+    const next = { ...choice, [key]: value };
+    setChoice(next);
+    await saveConsent(next);
+  }
 
   // Moved verbatim from AuthSheet: same calls, same error handling.
   async function handleSignOut() {
@@ -129,6 +147,18 @@ export function SettingsSheet({ visible, onClose, onSignInRequested }: SettingsS
             );
           })}
         </View>
+
+        <Text style={[styles.sectionLabel, styles.sectionSpacing]}>{t('settings.privacy')}</Text>
+        {CONSENT_ROWS.map(({ key, label }) => (
+          <View key={key} style={styles.switchRow}>
+            <Text style={styles.switchLabel}>{t(label)}</Text>
+            <Switch
+              value={choice[key]}
+              onValueChange={(value) => handleConsentChange(key, value)}
+              accessibilityLabel={t(label)}
+            />
+          </View>
+        ))}
       </BottomSheetView>
     </BottomSheet>
   );
@@ -194,6 +224,16 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     textAlign: 'center',
     marginTop: 14,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  switchLabel: {
+    fontSize: 15,
+    color: '#1e293b',
   },
   languageRow: {
     flexDirection: 'row',

@@ -93,7 +93,10 @@
     "account": "Konto",
     "language": "Sprache",
     "signInOrCreate": "Anmelden oder Konto erstellen",
-    "a11y": "Einstellungen"
+    "a11y": "Einstellungen",
+    "privacy": "Datenschutz",
+    "crashReports": "Absturzberichte",
+    "analytics": "Nutzungsstatistiken"
   },
   "roadEvents": {
     "closure": "Gesperrt",
@@ -105,5 +108,12 @@
     "source": "Quelle: {{name}}",
     "sourceAutobahn": "Autobahn GmbH des Bundes",
     "sourceOsm": "OpenStreetMap"
+  },
+  "consent": {
+    "title": "Hilf, FreiPark zu verbessern",
+    "body": "Mit deiner Erlaubnis senden wir Absturzberichte (Sentry) und Nutzungsstatistiken (PostHog), beide in der EU gehostet. Ohne deine Erlaubnis wird nichts gesendet. Du kannst das jederzeit in den Einstellungen ändern.",
+    "allow": "Erlauben",
+    "deny": "Nicht erlauben",
+    "privacyLink": "Datenschutzerklärung"
   }
 }

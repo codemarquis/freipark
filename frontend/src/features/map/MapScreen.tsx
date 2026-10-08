@@ -21,6 +21,7 @@ import { SpotDetailSheet } from './SpotDetailSheet';
 import { SettingsButton } from '../settings/SettingsButton';
 import { SettingsSheet } from '../settings/SettingsSheet';
 import { AuthSheet } from '../auth/AuthSheet';
+import { ConsentSheet } from '../consent/ConsentSheet';
 import type { GeoResult } from './useGeocoder';
 import type { SpotRow } from '../../lib/types';
 
@@ -253,6 +254,7 @@ export function MapScreen() {
         }}
       />
       <AuthSheet visible={signInVisible} onClose={() => setSignInVisible(false)} />
+      <ConsentSheet />
     </View>
   );
 }

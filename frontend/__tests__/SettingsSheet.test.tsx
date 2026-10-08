@@ -20,6 +20,10 @@ jest.mock('@gorhom/bottom-sheet', () => {
 });
 
 jest.mock('../src/features/auth/useAuth', () => ({ useAuth: jest.fn() }));
+jest.mock('../src/features/consent/consent', () => ({
+  loadConsent: jest.fn(() => Promise.resolve(null)),
+  saveConsent: jest.fn(() => Promise.resolve()),
+}));
 
 const mockUseAuth = useAuth as jest.Mock;
 const signOut = jest.fn();
@@ -161,5 +165,33 @@ describe('language', () => {
     // i18next is a shared singleton: switch back so later suites stay English.
     await fireEvent.press(screen.getByRole('button', { name: 'EN' }));
     await waitFor(() => expect(screen.getByText('Settings')).toBeTruthy());
+  });
+});
+
+describe('SettingsSheet — privacy', () => {
+  const { loadConsent, saveConsent } = jest.requireMock<{ loadConsent: jest.Mock; saveConsent: jest.Mock }>(
+    '../src/features/consent/consent',
+  );
+
+  it('shows both switches off when nothing was chosen', async () => {
+    await renderSheet();
+    await waitFor(() => expect(loadConsent).toHaveBeenCalled());
+    expect(screen.getByLabelText('Crash reports').props.value).toBe(false);
+    expect(screen.getByLabelText('Usage statistics').props.value).toBe(false);
+  });
+
+  it('shows the stored choice', async () => {
+    loadConsent.mockResolvedValueOnce({ crashReports: true, analytics: false, decidedAt: '2026-10-08T18:00:00.000Z' });
+    await renderSheet();
+    await waitFor(() => expect(screen.getByLabelText('Crash reports').props.value).toBe(true));
+    expect(screen.getByLabelText('Usage statistics').props.value).toBe(false);
+  });
+
+  it('saves a change straight away, keeping the other choice', async () => {
+    loadConsent.mockResolvedValueOnce({ crashReports: true, analytics: false, decidedAt: '2026-10-08T18:00:00.000Z' });
+    await renderSheet();
+    await waitFor(() => expect(screen.getByLabelText('Crash reports').props.value).toBe(true));
+    fireEvent(screen.getByLabelText('Usage statistics'), 'valueChange', true);
+    await waitFor(() => expect(saveConsent).toHaveBeenCalledWith({ crashReports: true, analytics: true }));
   });
 });

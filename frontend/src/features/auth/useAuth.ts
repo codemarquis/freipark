@@ -14,14 +14,8 @@ function identifyUser(user: User) {
     return;
   }
 
-  posthog?.identify(
-    user.id,
-    user.email
-      ? {
-          $set: { email: user.email },
-        }
-      : undefined,
-  );
+  // Account ID only — never the email (SPEC-analytics-consent.md).
+  posthog?.identify(user.id);
   identifiedUserId = user.id;
   signedOut = false;
 }

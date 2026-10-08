@@ -93,7 +93,10 @@
     "account": "Hesap",
     "language": "Dil",
     "signInOrCreate": "Giriş yapın veya hesap oluşturun",
-    "a11y": "Ayarlar"
+    "a11y": "Ayarlar",
+    "privacy": "Gizlilik",
+    "crashReports": "Çökme raporları",
+    "analytics": "Kullanım istatistikleri"
   },
   "roadEvents": {
     "closure": "Yol kapalı",
@@ -105,5 +108,12 @@
     "source": "Kaynak: {{name}}",
     "sourceAutobahn": "Autobahn GmbH des Bundes",
     "sourceOsm": "OpenStreetMap"
+  },
+  "consent": {
+    "title": "FreiPark'ı geliştirmemize yardım et",
+    "body": "İzninle çökme raporları (Sentry) ve kullanım istatistikleri (PostHog) gönderiyoruz; ikisi de AB'de barındırılıyor. İzin vermezsen hiçbir şey gönderilmez. Bunu istediğin zaman Ayarlar'dan değiştirebilirsin.",
+    "allow": "İzin ver",
+    "deny": "İzin verme",
+    "privacyLink": "Gizlilik politikası"
   }
 }

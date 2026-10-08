@@ -2323,3 +2323,21 @@ App
     construction rows transferred in one transaction (COPY/INSERT 6,290, DELETE 0). The anon key
     reads 21 events around the A100 through `road_events_in_bbox`; the table itself returns 401.
   - **Before users see it:** Autobahn reuse terms confirmed
+
+---
+
+## Implementation Plan: analytics-consent ([SPEC-analytics-consent.md](../SPEC-analytics-consent.md))
+
+Found 2026-10-08 in the pre-submission check: Sentry (session replay, `sendDefaultPii`) and PostHog
+(`identify` with email) ran without consent while the privacy policy said there was no analytics.
+Decided: keep both, disclose, ask first.
+
+- [x] **AC1: consent store + SDK gating + consent sheet + Settings switches — done 2026-10-08.**
+  `features/consent/consent.ts` (`freipark.consent.v1`; `Sentry.init` only on consent, `close` on
+  withdrawal; PostHog `defaultOptIn: false`, `preloadFeatureFlags: false`, `optIn`/`optOut`);
+  `ConsentSheet` on first launch (two identical buttons); Settings → Privacy switches. Less data:
+  no session replay, no feedback widget, `sendDefaultPii: false`, console breadcrumbs dropped,
+  `identify` without email. de/en/tr keys. Frontend 255/255, `tsc` clean.
+- [ ] **AC2: simulator check** — fresh install shows the sheet; no Sentry/PostHog request before a
+  choice; switches persist across restarts.
+- [ ] **AC3: privacy policy + App Store privacy label** match what is sent.
