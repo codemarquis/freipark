@@ -2244,7 +2244,18 @@ App
 
 ### RC5 — Map layer and translations
 
-- [ ] **RC5: `RoadEventsLayer` + `roadEvents.*` keys (de/en/tr)**
+- [x] **RC5: `RoadEventsLayer` + `roadEvents.*` keys (de/en/tr) — done 2026-10-08; not yet on screen (RCC1).**
+  8 tests written first (module missing), then passing: three line layers
+  (solid / dashed / dotted — MapLibre can't vary `line-dasharray` per
+  feature, so one layer per dash style, filtered by kind), all
+  `minzoom` 9; colour and width per kind; tap passes the event's
+  properties up; a miss does nothing; `roadEvents.*` key parity incl.
+  `{{date}}`/`{{name}}` placeholders. Typed with the style-spec types
+  `@maplibre/maplibre-react-native` re-exports (`FilterSpecification`,
+  `LineLayerSpecification['paint']`) — **no casts**. (A first draft used
+  `as unknown as never`; removed. Lesson: check `tsc` by exit code — a
+  grep for "error TS" missed colour-coded output once.) Frontend
+  221/221, `tsc` exit 0.
   - Line paint per kind (colour, width, dash) as in the spec; `minzoom` 9; below spot markers
   - Acceptance: paint/filters asserted via the MapLibre mock (as `SpotLayer.test.tsx`); key parity
   - Files: `frontend/src/features/map/RoadEventsLayer.tsx`, `frontend/__tests__/RoadEventsLayer.test.tsx`,

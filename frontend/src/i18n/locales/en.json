@@ -94,5 +94,16 @@
     "language": "Language",
     "signInOrCreate": "Sign in or create account",
     "a11y": "Settings"
+  },
+  "roadEvents": {
+    "closure": "Road closed",
+    "entry_exit_closure": "Junction closed",
+    "roadworks": "Roadworks",
+    "short_term_roadworks": "Short-term roadworks",
+    "construction": "Under construction",
+    "until": "until {{date}}",
+    "source": "Source: {{name}}",
+    "sourceAutobahn": "Autobahn GmbH des Bundes",
+    "sourceOsm": "OpenStreetMap"
   }
 }

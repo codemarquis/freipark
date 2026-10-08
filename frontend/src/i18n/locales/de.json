@@ -94,5 +94,16 @@
     "language": "Sprache",
     "signInOrCreate": "Anmelden oder Konto erstellen",
     "a11y": "Einstellungen"
+  },
+  "roadEvents": {
+    "closure": "Gesperrt",
+    "entry_exit_closure": "Anschlussstelle gesperrt",
+    "roadworks": "Baustelle",
+    "short_term_roadworks": "Tagesbaustelle",
+    "construction": "Im Bau",
+    "until": "bis {{date}}",
+    "source": "Quelle: {{name}}",
+    "sourceAutobahn": "Autobahn GmbH des Bundes",
+    "sourceOsm": "OpenStreetMap"
   }
 }

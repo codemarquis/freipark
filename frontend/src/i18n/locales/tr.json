@@ -94,5 +94,16 @@
     "language": "Dil",
     "signInOrCreate": "Giriş yapın veya hesap oluşturun",
     "a11y": "Ayarlar"
+  },
+  "roadEvents": {
+    "closure": "Yol kapalı",
+    "entry_exit_closure": "Bağlantı kapalı",
+    "roadworks": "Yol çalışması",
+    "short_term_roadworks": "Kısa süreli yol çalışması",
+    "construction": "Yapım aşamasında",
+    "until": "{{date}} tarihine kadar",
+    "source": "Kaynak: {{name}}",
+    "sourceAutobahn": "Autobahn GmbH des Bundes",
+    "sourceOsm": "OpenStreetMap"
   }
 }
