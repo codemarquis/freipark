@@ -2310,4 +2310,10 @@ App
     (verify counts) → install `*/30 * * * *` cron → OSM rows transferred (Mac → server, as before)
   - Rollback: a tested `rollback_011_road_events.sql` (function, table) written before applying; the
     cron line taken out
+  - **Prepared 2026-10-08:** `supabase/self-host/rollback_011_road_events.sql` tested locally (run
+    twice inside a rolled-back transaction: table and function gone, second run a no-op; 10,389 rows
+    intact after). `supabase/self-host/fetch_road_events.sh` (cron wrapper: runs the sweep in the
+    `api` container as `supabase_admin` via `PGPASSWORD`, overriding backend/.env's `DATABASE_URL`)
+    tested with the same command in a one-off `api` container on the local stack: 222 requests,
+    0 failed, 4,056 events, 48 stale removed, 68 s.
   - **Before users see it:** Autobahn reuse terms confirmed
