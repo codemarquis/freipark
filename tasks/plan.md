@@ -1862,7 +1862,20 @@ Frontend                                                                    │
 
 ### SA4 — Local backfill
 
-- [ ] **SA4: re-run `import_all.py` for all 80 cities locally**
+- [x] **SA4: re-run `import_all.py` for all 80 cities locally — done 2026-10-08.**
+  All 80 imported, 0 failures, 11.5 min wall time (`caffeinate -i`).
+  Spot total unchanged at 547,590; backend suite 115/115 afterwards
+  (incl. `test_every_spot_is_car_parking`). Germany-wide: **91.3% with
+  an address** — nearest_address 413,781 (75.6%), nearest_street 72,532
+  (13.2%), street_name 11,662 (2.1%), own_tags 2,133 (0.4%), none 47,482
+  (8.7%). **Berlin 97.9%** (criterion ≥ 95% met). Weakest: Halle 67%,
+  Chemnitz 76%, Magdeburg 80%. Address data isn't thin there (Halle
+  ~0.14 address points per resident vs Berlin's ~0.12); the unaddressed
+  spots are almost all large surface lots (Halle 1,706 of 5,074 lots),
+  most likely parking between big housing/commercial blocks more than
+  60 m from any address. Not investigated spot by spot; the 60 m limit
+  is unchanged (changing it is ask-first per the spec). Those spots show
+  coordinates only.
   - Acceptance: Berlin ≥ 95% with an address (measured 97.9%); per-source counts logged for
     every city; Berlin import grows ≤ 30 s; `test_every_spot_is_car_parking` still passes
   - Verify: SQL coverage report per city, recorded here
