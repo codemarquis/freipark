@@ -2381,7 +2381,12 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 ### Phase 1 — data
 
-- [ ] **PR1: street parking stored as `street`, not `lot`**
+- [x] **PR1: street parking stored as `street`, not `lot` — done 2026-10-09.** `_spot_type` adds
+  `STREET_PARKING_KINDS`; the "own name as address" rule stays tied to old `parking:lane` ways (only
+  16 of 84k Berlin street areas have a name, and it's the area's). `012` part 1 updates only rows that
+  change (131,426 locally, all cities). 11 new import cases (65/65) + 6 DB tests (rolled back); a test
+  keeps the SQL and Python kind lists in sync. Dropping `half_on_kerb` from the SQL fails 2 tests.
+  Backend 214/214. (Docker Desktop had hung; restarted 2026-10-09, local data intact.)
   - `_spot_type`: `parking=street_side|lane|on_kerb|half_on_kerb|shoulder` → `street` (old
     `parking:lane` rule kept); `migrations/012_spot_rules.sql` part 1: one-off
     `UPDATE parking_spots SET spot_type='street' WHERE spot_type='lot' AND tags->>'parking' IN (…)`

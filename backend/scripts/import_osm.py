@@ -214,8 +214,19 @@ def _iter_features(path: Path) -> Iterator[dict]:
                 pass
 
 
+# parking=* values that mean kerbside parking mapped as its own area — how
+# Berlin maps street parking (84k areas; SPEC-parking-rules.md). Keep in sync
+# with migrations/012_spot_rules.sql.
+STREET_PARKING_KINDS = frozenset({"street_side", "lane", "on_kerb", "half_on_kerb", "shoulder"})
+
+
+def _is_lane_way(props: dict) -> bool:
+    """A street way carrying the old parking:lane:* tags (the way is the street)."""
+    return any(k.startswith("parking:lane") for k in props)
+
+
 def _spot_type(props: dict) -> str:
-    if any(k.startswith("parking:lane") for k in props):
+    if _is_lane_way(props) or props.get("parking") in STREET_PARKING_KINDS:
         return "street"
     if props.get("parking") in ("multi-storey", "underground", "rooftop"):
         return "garage"
@@ -263,7 +274,9 @@ def _own_address(props: dict) -> dict:
                 "address_housenumber": props.get("addr:housenumber") or None,
                 "address_postcode": props.get("addr:postcode") or None,
                 "address_source": "own_tags", "address_distance_m": 0.0}
-    if _spot_type(props) == "street" and props.get("name"):
+    # Only a street way's name is the street; a street-parking *area*'s name
+    # (16 of 84k in Berlin) is the area's own, not an address.
+    if _is_lane_way(props) and props.get("name"):
         return {**empty, "address_street": props["name"], "address_source": "street_name",
                 "address_distance_m": 0.0}
     return empty

@@ -28,6 +28,36 @@ def test_car_parking_is_kept(osm_type, amenity):
     assert row["osm_type"] == osm_type
 
 
+@pytest.mark.parametrize("kind", ["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder"])
+def test_street_parking_area_is_street_not_lot(kind):
+    # How Berlin maps kerbside parking: 84k separate areas (SPEC-parking-rules.md).
+    row = import_osm._feature_to_row(feature("way", {"amenity": "parking", "parking": kind}), "city")
+    assert row["spot_type"] == "street"
+
+
+@pytest.mark.parametrize("parking, expected", [
+    ("surface", "lot"), (None, "lot"), ("multi-storey", "garage"), ("underground", "garage"), ("rooftop", "garage"),
+])
+def test_lots_and_garages_unchanged(parking, expected):
+    tags = {"amenity": "parking", **({"parking": parking} if parking else {})}
+    assert import_osm._feature_to_row(feature("way", tags), "city")["spot_type"] == expected
+
+
+def test_a_street_parking_area_name_is_not_used_as_its_address():
+    # The area's own name ("Parkstreifen Nord") is not a street; addresses for
+    # these come from the nearest address/street, as before.
+    row = import_osm._feature_to_row(
+        feature("way", {"amenity": "parking", "parking": "street_side", "name": "Parkstreifen Nord"}), "city")
+    assert row["spot_type"] == "street"
+    assert row["address_source"] is None
+
+
+def test_the_sql_and_python_street_kinds_agree():
+    sql = (Path(__file__).resolve().parents[2] / "supabase/migrations/012_spot_rules.sql").read_text()
+    for kind in import_osm.STREET_PARKING_KINDS:
+        assert f"'{kind}'" in sql
+
+
 @pytest.mark.parametrize("lane_tag", ["parking:lane:left", "parking:lane:right", "parking:lane:both"])
 def test_street_parking_way_is_kept_as_street(lane_tag):
     row = import_osm._feature_to_row(feature("way", {lane_tag: "parallel", "highway": "residential"}, LINE), "city")
