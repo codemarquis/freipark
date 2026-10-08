@@ -115,5 +115,33 @@
     "allow": "İzin ver",
     "deny": "İzin verme",
     "privacyLink": "Gizlilik politikası"
+  },
+  "rules": {
+    "free": "Ücretsiz",
+    "freeUntil": "Şu an ücretsiz · bitiş {{time}}",
+    "freeUntilPaid": "Şu an ücretsiz · {{time}} itibarıyla ücretli",
+    "paid": "Ücretli park",
+    "paidUntil": "Şu an ücretli · bitiş {{time}}",
+    "paidUntilFree": "Şu an ücretli · {{time}} sonrası ücretsiz",
+    "restrictedUntil": "{{what}} · bitiş {{time}}",
+    "restriction": {
+      "no_parking": "Park yasak",
+      "no_stopping": "Durmak yasak",
+      "loading_only": "Yalnızca yükleme",
+      "charging_only": "Yalnızca elektrikli araç şarjı"
+    },
+    "residents": "Yalnızca izinli bölge sakinleri",
+    "customers": "Yalnızca müşteriler",
+    "notPublic": "Halka açık değil",
+    "unknown": "Kurallar bilinmiyor — tabelalara bakın",
+    "maxstay": "En fazla {{duration}}",
+    "maxstayUntil": "En fazla {{duration}} · bitiş {{time}}",
+    "durationH": "{{h}} sa",
+    "durationMin": "{{m}} dk",
+    "durationHMin": "{{h}} sa {{m}} dk",
+    "disc": "Park diski gerekli",
+    "zone": "Park bölgesi {{zone}} (izin sahipleri muaf)",
+    "incomplete": "Bazı kurallar okunamadı",
+    "disclaimer": "OpenStreetMap'ten — yerindeki tabelalar önceliklidir."
   }
 }

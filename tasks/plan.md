@@ -2442,7 +2442,12 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 ### Phase 3 — UI
 
-- [ ] **PR5: rule line on the spot sheet**
+- [x] **PR5: rule line on the spot sheet — done 2026-10-08 (frontend; real data needs PR2).**
+  `useSpotDetails` returns `rule_tags` (string values only; missing/malformed → `{}`, so the address
+  keeps working against a server without `012`). `ruleText.ts` (pure: headline, tone, details; times
+  in Berlin, 24-hour, weekday when not today) + `RuleLine` (refreshes each minute; nothing while
+  loading). Turkish strings avoid case suffixes on times. 337 frontend tests; removing the disclaimer
+  fails 4 of them.
   - `useSpotDetails` reads `rule_tags` (validated; anything odd → `{}`); `RuleLine` component under
     the type: coloured headline + details + disclaimer "From OpenStreetMap — signs on site take
     precedence."; re-evaluates each minute while open; `rules.*` keys in de/en/tr.

@@ -13,6 +13,7 @@ const FULL: SpotDetails = {
   address_postcode: '10997',
   address_source: 'own_tags',
   city_name: 'Berlin',
+  rule_tags: {},
 };
 
 describe('formatAddress', () => {
@@ -51,7 +52,7 @@ describe('formatAddress', () => {
   it('returns null when there is no street', () => {
     expect(
       formatAddress(
-        { address_street: null, address_housenumber: null, address_postcode: null, address_source: null, city_name: 'Berlin' },
+        { address_street: null, address_housenumber: null, address_postcode: null, address_source: null, city_name: 'Berlin', rule_tags: {} },
         t,
       ),
     ).toBeNull();

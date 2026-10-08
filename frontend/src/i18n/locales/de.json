@@ -115,5 +115,33 @@
     "allow": "Erlauben",
     "deny": "Nicht erlauben",
     "privacyLink": "Datenschutzerklärung"
+  },
+  "rules": {
+    "free": "Kostenlos",
+    "freeUntil": "Jetzt kostenlos bis {{time}}",
+    "freeUntilPaid": "Jetzt kostenlos · ab {{time}} gebührenpflichtig",
+    "paid": "Gebührenpflichtig",
+    "paidUntil": "Jetzt gebührenpflichtig bis {{time}}",
+    "paidUntilFree": "Jetzt gebührenpflichtig bis {{time}} · dann kostenlos",
+    "restrictedUntil": "{{what}} bis {{time}}",
+    "restriction": {
+      "no_parking": "Parkverbot",
+      "no_stopping": "Halteverbot",
+      "loading_only": "Nur Ladezone",
+      "charging_only": "Nur zum Laden (E-Auto)"
+    },
+    "residents": "Nur Anwohner mit Parkausweis",
+    "customers": "Nur für Kunden",
+    "notPublic": "Nicht öffentlich",
+    "unknown": "Regeln unbekannt — bitte Schilder beachten",
+    "maxstay": "Max. {{duration}}",
+    "maxstayUntil": "Max. {{duration}} bis {{time}}",
+    "durationH": "{{h}} Std.",
+    "durationMin": "{{m}} Min.",
+    "durationHMin": "{{h}} Std. {{m}} Min.",
+    "disc": "Parkscheibe erforderlich",
+    "zone": "Parkzone {{zone}} (Bewohner mit Ausweis frei)",
+    "incomplete": "Einige Regeln konnten nicht gelesen werden",
+    "disclaimer": "Aus OpenStreetMap — die Beschilderung vor Ort hat Vorrang."
   }
 }

@@ -115,5 +115,33 @@
     "allow": "Allow",
     "deny": "Don't allow",
     "privacyLink": "Privacy policy"
+  },
+  "rules": {
+    "free": "Free",
+    "freeUntil": "Free now until {{time}}",
+    "freeUntilPaid": "Free now · paid from {{time}}",
+    "paid": "Paid parking",
+    "paidUntil": "Paid now until {{time}}",
+    "paidUntilFree": "Paid now until {{time}} · then free",
+    "restrictedUntil": "{{what}} until {{time}}",
+    "restriction": {
+      "no_parking": "No parking",
+      "no_stopping": "No stopping",
+      "loading_only": "Loading only",
+      "charging_only": "EV charging only"
+    },
+    "residents": "Residents with a permit only",
+    "customers": "Customers only",
+    "notPublic": "Not public",
+    "unknown": "Rules unknown — check the signs",
+    "maxstay": "Max. {{duration}}",
+    "maxstayUntil": "Max. {{duration}} until {{time}}",
+    "durationH": "{{h}} h",
+    "durationMin": "{{m}} min",
+    "durationHMin": "{{h}} h {{m}} min",
+    "disc": "Parking disc required",
+    "zone": "Parking zone {{zone}} (permit holders exempt)",
+    "incomplete": "Some rules couldn't be read",
+    "disclaimer": "From OpenStreetMap — signs on site take precedence."
   }
 }

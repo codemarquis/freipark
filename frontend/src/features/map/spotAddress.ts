@@ -11,6 +11,8 @@ export interface SpotDetails {
   address_postcode: string | null;
   address_source: AddressSource | null;
   city_name: string;
+  /** OSM rule tags (SPEC-parking-rules.md); {} when none or not yet served. */
+  rule_tags: Record<string, string>;
 }
 
 /** "Oranienstraße 12, 10997 Berlin" — missing parts left out. Rules 3–4

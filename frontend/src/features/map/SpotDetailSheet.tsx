@@ -10,6 +10,7 @@ import { buildShareMessage } from './shareSpot';
 import { formatAddress, formatCoords } from './spotAddress';
 import { useSpotDetails } from './useSpotDetails';
 import { ReportButtons } from '../reports/ReportButtons';
+import { RuleLine } from '../rules/RuleLine';
 import { activeReport } from '../reports/reportStatus';
 import type { SubmittedReport } from '../reports/useReportSpot';
 import type { RouteState } from './useRoute';
@@ -193,6 +194,7 @@ export function SpotDetailSheet({
             <Text style={styles.access}>
               {spot.access ? t(ACCESS_LABEL_KEY[spot.access]) : t('spot.accessUnknown')}
             </Text>
+            <RuleLine ruleTags={details?.rule_tags ?? null} />
             {report && (
               <Text
                 style={[styles.report, report.status === 'free' ? styles.reportFree : styles.reportFull]}

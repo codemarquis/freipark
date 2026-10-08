@@ -19,11 +19,30 @@ beforeEach(() => {
 });
 
 describe('useSpotDetails', () => {
+  it('passes rule tags through, keeping only string values', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{ ...ROW, rule_tags: { fee: 'yes', zone: '23', capacity: 4, weird: null } }],
+      error: null,
+    });
+    const { result } = await renderHook(() => useSpotDetails('spot-1'));
+    await act(async () => {});
+    expect(result.current?.rule_tags).toEqual({ fee: 'yes', zone: '23' });
+  });
+
+  it('treats missing or malformed rule tags as none, keeping the address (server before 012)', async () => {
+    for (const rule_tags of [undefined, null, 'fee=yes', ['fee']]) {
+      mockRpc.mockResolvedValueOnce({ data: [{ ...ROW, rule_tags }], error: null });
+      const { result } = await renderHook(() => useSpotDetails(`spot-${String(rule_tags)}`));
+      await act(async () => {});
+      expect(result.current).toEqual({ ...ROW, rule_tags: {} });
+    }
+  });
+
   it('fetches spot_details for the spot and returns the row', async () => {
     const { result } = await renderHook(() => useSpotDetails('spot-1'));
     await act(async () => {});
     expect(mockRpc).toHaveBeenCalledWith('spot_details', { p_spot_id: 'spot-1' });
-    expect(result.current).toEqual(ROW);
+    expect(result.current).toEqual({ ...ROW, rule_tags: {} });
   });
 
   it('does nothing without a spot', async () => {
@@ -54,7 +73,7 @@ describe('useSpotDetails', () => {
       initialProps: { id: 'spot-1' },
     });
     await act(async () => {});
-    expect(result.current).toEqual(ROW);
+    expect(result.current).toEqual({ ...ROW, rule_tags: {} });
     mockRpc.mockReturnValueOnce(new Promise(() => {}));
     await rerender({ id: 'spot-2' });
     expect(result.current).toBeNull();

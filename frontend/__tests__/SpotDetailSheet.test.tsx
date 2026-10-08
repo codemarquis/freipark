@@ -38,6 +38,7 @@ const DETAILS = {
   address_postcode: '10997',
   address_source: 'nearest_address',
   city_name: 'Berlin',
+  rule_tags: {},
 };
 const { posthog: mockPosthog } = jest.requireMock('../src/lib/posthog') as {
   posthog: { capture: jest.Mock };
@@ -449,6 +450,18 @@ describe('address and coordinates', () => {
   it('asks for the details of the open spot', async () => {
     await renderSheet(BASE);
     expect(mockUseSpotDetails).toHaveBeenLastCalledWith('1');
+  });
+
+  it('shows the parking rule line with its disclaimer once details have loaded', async () => {
+    mockUseSpotDetails.mockReturnValue({ ...DETAILS, rule_tags: { fee: 'no' } });
+    await renderSheet(BASE);
+    expect(screen.getByText('Free')).toBeTruthy();
+    expect(screen.getByText('From OpenStreetMap — signs on site take precedence.')).toBeTruthy();
+  });
+
+  it('shows no rule line while details are loading', async () => {
+    await renderSheet(BASE);
+    expect(screen.queryByText('From OpenStreetMap — signs on site take precedence.')).toBeNull();
   });
 
   it('shows the address once it has loaded', async () => {
