@@ -2423,7 +2423,15 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
     `PH` → unknown); `npx tsc --noEmit`.
   - Files: `parseRules.ts`, `__tests__/parseRules.test.ts`
 
-- [ ] **PR4: `ruleNow(rules, now) → { state, until, next, details }`**
+- [x] **PR4: `ruleNow(rules, now)` — done 2026-10-08.** Returns `state` (restricted / not_public /
+  customers / residents / paid / free / unknown), `until` + `next` (≤ 7 days), `maxstayMin` +
+  `maxstayUntil`, `disc`, `zone`, `incomplete`. Berlin wall-clock via `Intl` (`Europe/Berlin`), so
+  the phone's own zone doesn't matter; if `Intl` fails → unknown. A `zone` is a detail, not
+  "residents only" (in Berlin it marks a paid zone where permit holders park free); residents-only
+  comes from `access=residents|permit`. Any unreadable `fee*`/`access*`/`restriction*` → unknown
+  unless a readable restriction applies. 26 tests (Thursday/Saturday/Sunday boundaries, midnight,
+  both 2026 DST weekends, precedence, never-guess, Intl failure, disc + max stay); a fixed-UTC+2
+  mutation fails the autumn DST test.
   - `src/features/rules/ruleNow.ts`: wall-clock time in `Europe/Berlin` via `Intl` (no new
     dependency); precedence restriction → residents → paid → free → unknown; next change within 7
     days; maxstay/disc details.
