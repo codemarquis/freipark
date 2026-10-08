@@ -33,7 +33,7 @@ def add_event(cur, source_id, kind="roadworks", lon=13.30, lat=52.53, source="au
 def events(write_tx):
     cur = write_tx
     act_as(cur, "admin")
-    add_event(cur, "test-berlin-1", kind="closure", subtitle="Wedding -> Wilmersdorf",
+    add_event(cur, "test-berlin-1", kind="closure", subtitle="FreiPark-Test Nord -> Süd",
               description=["Beginn: 08.10.26", "Ende: 21.10.26 um 16:00 Uhr"],
               starts_at="2026-10-08T12:00:00+02:00", ends_at="2026-10-21T16:00:00+02:00")
     add_event(cur, "test-munich-1", lon=11.58, lat=48.14)
@@ -47,7 +47,7 @@ def test_anon_gets_events_inside_the_box_only(events):
     assert [d.name for d in cur.description] == COLUMNS
     rows = [dict(zip(COLUMNS, r)) for r in cur.fetchall()]
     titles = {(r["kind"], r["subtitle"]) for r in rows}
-    assert ("closure", "Wedding -> Wilmersdorf") in titles
+    assert ("closure", "FreiPark-Test Nord -> Süd") in titles
     assert all(abs(json.loads(r["geometry"])["coordinates"][0][0] - 11.58) > 0.5 for r in rows)
 
 
@@ -55,7 +55,7 @@ def test_returns_geojson_and_the_details(events):
     cur = events
     act_as(cur, "anon")
     cur.execute(IN_BBOX, (13.25, 52.50, 13.35, 52.56, 100))
-    row = next(dict(zip(COLUMNS, r)) for r in cur.fetchall() if r[4] == "Wedding -> Wilmersdorf")
+    row = next(dict(zip(COLUMNS, r)) for r in cur.fetchall() if r[4] == "FreiPark-Test Nord -> Süd")
     geometry = json.loads(row["geometry"])
     assert geometry["type"] == "LineString"
     assert geometry["coordinates"][0] == [13.3, 52.53]

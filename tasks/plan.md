@@ -2213,7 +2213,25 @@ App
 
 ### RC4 — OSM construction import
 
-- [ ] **RC4: `backend/scripts/import_osm_construction.py` for the 16 cached state extracts**
+- [x] **RC4: `backend/scripts/import_osm_construction.py` for the 16 cached state extracts — done 2026-10-08, local only.**
+  36 unit/DB tests written first (module missing), then passing; a
+  mutation (treating `footway` as a car road) was caught.
+  **First real run found 0 ways in every state:** `osmium export` only
+  emits `@type`/`@id` with the export config (`-c osmium-export-config.json`,
+  as `import_osm.py` uses); without it `parse_way` rejected everything.
+  The unit tests missed it because their hand-made features already had
+  `@type`. Fixed, with a new test that runs the **real osmium pipeline**
+  on a tiny hand-written OSM file (failed with `[]`, then passed). Empty
+  result removed nothing, as designed.
+  **Real run:** 16 extracts in ~22 s, **6,426 ways** (NRW 1,224 … Saarland
+  21; Berlin 296), 1,006 with an opening date; intermediates deleted.
+  **Test-isolation fix found on the way:** an RC1 test picked its row by
+  direction "Wedding -> Wilmersdorf", which a *real* A100 item (loaded
+  in RC3) also has; renamed to a direction that can't occur. Backend
+  190/190.
+  **Open product question:** 136 ways (2%) have an opening date > 30
+  days in the past (e.g. Dolomitenstraße, 2025-08-28) — likely open,
+  OSM not updated. Proposed: skip those at import.
   - Car-road `construction=*` only; `opening_date` → `ends_at`; source_id `way/<id>`; upsert;
     OSM rows no longer present are removed (full re-import semantics)
   - Acceptance: filter unit tests (car roads kept; footway/path/cycleway/steps/track/bridleway/
