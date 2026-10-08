@@ -152,3 +152,144 @@ def test_reimport_clears_own_tags_that_were_removed_in_osm(berlin):
             address_distance_m=0.0)
     _upsert(cur, city_id, -920_000_003)  # tag gone in OSM
     assert _stored(cur, -920_000_003) == (None, None, None)
+
+
+# --- Rules 3-4: nearest address point / named street (SA3) ----------------
+
+M_LAT = 1 / 111_320  # ~1 m of latitude, in degrees
+LON0, LAT0 = 13.40, 52.50
+
+
+@pytest.fixture
+def area(write_tx):
+    """Temp address tables as the importer creates them, a throwaway city (so
+    the step doesn't recompute every real Berlin spot), and helpers."""
+    cur = write_tx
+    act_as(cur, "admin")
+    cur.execute("INSERT INTO cities (slug, name, country_code, geofabrik_url) "
+                "VALUES ('test-address-city', 'Teststadt', 'DE', 'https://example.invalid/test.osm.pbf') RETURNING id")
+    city_id = str(cur.fetchone()[0])
+    cur.execute(import_osm._ADDRESS_TEMP_TABLES_SQL)
+    cur.execute(import_osm._ADDRESS_PREPARE_SQL)  # empty final tables + indexes
+
+    def point(street, number, metres_north, postcode=None):
+        cur.execute("INSERT INTO addr_points (street, housenumber, postcode, geom) "
+                    "VALUES (%s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))",
+                    (street, number, postcode, LON0, LAT0 + metres_north * M_LAT))
+
+    def street(name, metres_north):
+        lat = LAT0 + metres_north * M_LAT
+        cur.execute("INSERT INTO addr_streets (name, geom) "
+                    "VALUES (%s, ST_SetSRID(ST_MakeLine(ST_MakePoint(%s, %s), ST_MakePoint(%s, %s)), 4326))",
+                    (name, LON0 - 0.002, lat, LON0 + 0.002, lat))
+
+    def spot(osm_id, **address):
+        _upsert(cur, city_id, osm_id, **address)
+
+    def assign():
+        cur.execute(import_osm._ASSIGN_ADDRESSES_SQL, {"city_id": city_id})
+
+    def stored(osm_id):
+        cur.execute("SELECT address_street, address_housenumber, address_postcode, address_source, "
+                    "round(address_distance_m) FROM parking_spots WHERE osm_id = %s AND osm_type = 'node'", (osm_id,))
+        return cur.fetchone()
+
+    return {"cur": cur, "point": point, "street": street, "spot": spot, "assign": assign, "stored": stored}
+
+
+def test_nearest_address_point_within_60m_wins(area):
+    area["spot"](-930_000_001)
+    area["point"]("Fernstraße", "1", 45)
+    area["point"]("Oranienstraße", "12", 20, postcode="10997")
+    area["street"]("Nahweg", 5)  # a closer street does not beat an address point
+    area["assign"]()
+    assert area["stored"](-930_000_001) == ("Oranienstraße", "12", "10997", "nearest_address", 20)
+
+
+def test_falls_back_to_nearest_named_street(area):
+    area["spot"](-930_000_002)
+    area["point"]("Fernstraße", "1", 61)
+    area["street"]("Oranienstraße", 30)
+    area["assign"]()
+    assert area["stored"](-930_000_002) == ("Oranienstraße", None, None, "nearest_street", 30)
+
+
+def test_nothing_within_60m_leaves_the_address_empty(area):
+    area["spot"](-930_000_003)
+    area["point"]("Fernstraße", "1", 61)
+    area["street"]("Fernweg", 75)
+    area["assign"]()
+    assert area["stored"](-930_000_003) == (None, None, None, None, None)
+
+
+def test_no_address_data_at_all_is_handled(area):
+    area["spot"](-930_000_004)
+    area["assign"]()
+    assert area["stored"](-930_000_004) == (None, None, None, None, None)
+
+
+def test_own_tags_and_street_names_are_never_overwritten(area):
+    area["spot"](-930_000_005, address_street="Adalbertstraße", address_housenumber="3",
+                  address_source="own_tags", address_distance_m=0.0)
+    area["spot"](-930_000_006, address_street="Ackerstraße", address_source="street_name", address_distance_m=0.0)
+    area["point"]("Oranienstraße", "12", 5)
+    area["assign"]()
+    assert area["stored"](-930_000_005)[3] == "own_tags"
+    assert area["stored"](-930_000_006)[:1] + area["stored"](-930_000_006)[3:4] == ("Ackerstraße", "street_name")
+
+
+def test_a_stale_nearest_address_is_replaced_or_cleared(area):
+    area["spot"](-930_000_007)
+    area["cur"].execute("UPDATE parking_spots SET address_street = 'Altstraße', address_source = 'nearest_street', "
+                        "address_distance_m = 10 WHERE osm_id = -930000007")
+    area["assign"]()  # Altstraße no longer in OSM, nothing else nearby
+    assert area["stored"](-930_000_007) == (None, None, None, None, None)
+
+
+def test_running_the_step_twice_gives_the_same_result(area):
+    area["spot"](-930_000_008)
+    area["point"]("Oranienstraße", "12", 20)
+    area["assign"]()
+    first = area["stored"](-930_000_008)
+    area["assign"]()
+    assert area["stored"](-930_000_008) == first
+
+
+def test_other_cities_are_untouched(area):
+    cur = area["cur"]
+    cur.execute("SELECT id FROM cities WHERE slug = 'berlin'")
+    berlin = str(cur.fetchone()[0])
+    _upsert(cur, berlin, -930_000_009)
+    area["point"]("Oranienstraße", "12", 0)
+    area["assign"]()
+    assert area["stored"](-930_000_009) == (None, None, None, None, None)
+
+
+def test_a_rerun_with_no_changes_rewrites_no_rows(area):
+    """Only changed addresses are written: re-imports must not rewrite every
+    spot (each row carries its full OSM tags and geometry)."""
+    cur = area["cur"]
+    area["spot"](-930_000_010)
+    area["point"]("Oranienstraße", "12", 20)
+    area["assign"]()
+    cur.execute("SAVEPOINT before_rerun")  # new subtransaction id for writes after this point
+    cur.execute("SELECT xmin::text FROM parking_spots WHERE osm_id = -930000010")
+    before = cur.fetchone()[0]
+    area["assign"]()
+    cur.execute("SELECT xmin::text FROM parking_spots WHERE osm_id = -930000010")
+    assert cur.fetchone()[0] == before
+
+
+def test_address_lookups_use_the_spatial_index(area):
+    """Regression: the temp-table indexes must be usable in the same
+    transaction, or every lookup becomes a full scan (hours per city)."""
+    cur = area["cur"]
+    for i in range(300):
+        area["point"](f"Straße {i}", str(i), i)
+    cur.execute("ANALYZE addr_points")
+    cur.execute("SELECT bool_or(indcheckxmin) FROM pg_index WHERE indrelid IN ('addr_points'::regclass, 'addr_streets'::regclass)")
+    assert cur.fetchone()[0] is False
+    cur.execute("SET LOCAL enable_seqscan = off")  # only to ask: is an index path available at all?
+    cur.execute("EXPLAIN SELECT 1 FROM addr_points ap WHERE ap.geom && ST_Expand(ST_SetSRID(ST_MakePoint(13.4, 52.5), 4326), 0.0012) "
+                "ORDER BY ap.geom <-> ST_SetSRID(ST_MakePoint(13.4, 52.5), 4326) LIMIT 1")
+    assert "addr_points_geom_idx" in "\n".join(r[0] for r in cur.fetchall())

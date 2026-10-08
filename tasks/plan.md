@@ -1819,7 +1819,35 @@ Frontend                                                                    │
 
 ### SA3 — Importer: rules 3–4 (spatial)
 
-- [ ] **SA3: address step after the upsert**
+- [x] **SA3: address step after the upsert — done 2026-10-08, local only.**
+  Tests first: 14 unit (`_address_point`, `_street_name`) + 10 DB tests
+  (nearest wins, 60 m cut-off, street fallback, nothing nearby, no data,
+  own address untouched, stale nearest replaced/cleared, idempotent,
+  other cities untouched, **no row rewritten on an unchanged re-run**,
+  **temp-table index usable**); backend suite 115/115 in < 1 s (address
+  tests use a throwaway city, not all of Berlin).
+  **Real Berlin run: 41 s for the whole import**; 97.9% of 63,751 spots
+  with an address (58,720 nearest address, 3,596 nearest street, 94 own
+  tags, 22 street name; 1,319 none) — matches the spec's measurement.
+  **Two dead ends, root-caused (worth knowing for any future import SQL):**
+  1. First version took *hours* (it ran orphaned for 4 h after the Mac
+     slept and the client died). Adding a box filter didn't help.
+     `EXPLAIN ANALYZE` on 20 spots showed every lookup was a
+     **sequential scan of a 3.4 GB temp table** — the GiST indexes were
+     never used. Cause: the temp tables were filled, then `UPDATE`d
+     (geometry from GeoJSON), then indexed — all in one transaction;
+     an index built over rows updated in the same transaction can be
+     unusable to it (`pg_index.indcheckxmin`), and the update doubled
+     the table with dead row versions. Fix: COPY raw GeoJSON into
+     staging tables and **create** the compact final tables from them
+     (`CREATE TABLE … AS`), then index + `ANALYZE`. 2,000-spot search:
+     381 s → 0.23 s, identical results.
+  2. The UPDATE now writes only rows whose address changed
+     (`IS DISTINCT FROM`), so re-imports barely write.
+  Safeguards: `SET LOCAL statement_timeout = '15min'` in the step (a
+  runaway dies in Postgres instead of living on orphaned); the
+  ~380 MB-per-city address intermediates are deleted after loading
+  (the Mac's disk is 96% full).
   - Extract address points (`nwr/addr:housenumber`) and named, car-usable streets
     (`w/highway`, excluding footway, path, cycleway, steps, bridleway, track, corridor,
     pedestrian-only platforms) from the same clipped PBF; load into temp tables with GiST

@@ -121,3 +121,36 @@ def test_no_own_address_leaves_all_fields_empty(tags):
     osm_type = "way" if any(k.startswith("parking:lane") for k in tags) else "node"
     row = import_osm._feature_to_row(feature(osm_type, tags, LINE if osm_type == "way" else POINT), "city")
     assert address(row) == (None, None, None, None, None)
+
+
+# --- Address sources for rules 3-4 ------------------------------------------
+
+def test_address_point_needs_street_and_number():
+    assert import_osm._address_point(
+        {"addr:street": "Oranienstraße", "addr:housenumber": "12", "addr:postcode": "10997"}
+    ) == ("Oranienstraße", "12", "10997")
+    assert import_osm._address_point({"addr:street": "Oranienstraße", "addr:housenumber": "12"}) == (
+        "Oranienstraße", "12", None)
+    assert import_osm._address_point({"addr:housenumber": "12"}) is None
+    assert import_osm._address_point({"addr:street": "Oranienstraße"}) is None
+
+
+@pytest.mark.parametrize("highway", ["residential", "primary", "tertiary", "living_street", "service", "unclassified"])
+def test_named_car_streets_are_used(highway):
+    assert import_osm._street_name({"highway": highway, "name": "Oranienstraße"}) == "Oranienstraße"
+
+
+@pytest.mark.parametrize(
+    "props",
+    [
+        {"highway": "footway", "name": "Uferweg"},
+        {"highway": "cycleway", "name": "Radweg"},
+        {"highway": "path", "name": "Waldweg"},
+        {"highway": "steps", "name": "Treppe"},
+        {"highway": "pedestrian", "name": "Fußgängerzone"},
+        {"highway": "track", "name": "Feldweg"},
+        {"highway": "residential"},  # unnamed
+    ],
+)
+def test_streets_cars_cannot_use_or_without_a_name_are_ignored(props):
+    assert import_osm._street_name(props) is None

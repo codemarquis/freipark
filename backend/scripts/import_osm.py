@@ -11,6 +11,7 @@ Usage:
     python import_osm.py --city berlin --download-only
 """
 
+import io
 import json
 import os
 import subprocess
@@ -110,6 +111,7 @@ def main(city: str, force_download: bool, download_only: bool) -> None:
     _filter_osm(source, filtered)
     _export_geojson(filtered, geojsonseq)
     inserted, updated = _import_rows(dsn, city_id, geojsonseq)
+    _assign_addresses(dsn, city, city_id, source)
     click.echo(f"[freipark-import] done — inserted={inserted}, updated={updated}")
 
 
@@ -298,6 +300,181 @@ def _feature_to_row(feature: dict, city_id: str) -> dict | None:
         "tags":      json.dumps({k: v for k, v in props.items() if not k.startswith("@")}),
         **street_addr,
     }
+
+
+# ---------------------------------------------------------------------------
+# Address rules 3-4 (SPEC-spot-address.md): nearest address point or named
+# street within 60 m, worked out after each city's upsert from the same PBF.
+# ---------------------------------------------------------------------------
+
+_ADDRESS_MAX_M = 60
+
+# Highways cars can't use: their names would mislead a driver.
+_NON_CAR_HIGHWAYS = frozenset({
+    "footway", "path", "cycleway", "steps", "bridleway", "track", "corridor",
+    "pedestrian", "platform", "elevator", "proposed", "construction",
+})
+
+# Raw GeoJSON is COPYed into staging tables, then the compact final tables
+# are *created* from them with the geometry already computed. Never UPDATE
+# a temp table before indexing it in the same transaction: an index built
+# over rows updated in this transaction can be unusable to it
+# (pg_index.indcheckxmin), and the dead row versions double the table — on
+# Berlin that turned each nearest lookup into a 3.4 GB sequential scan.
+_ADDRESS_TEMP_TABLES_SQL = """
+CREATE TEMP TABLE addr_points_raw (
+    street text NOT NULL, housenumber text NOT NULL, postcode text, gj text NOT NULL
+) ON COMMIT DROP;
+CREATE TEMP TABLE addr_streets_raw (name text NOT NULL, gj text NOT NULL) ON COMMIT DROP;
+"""
+
+_ADDRESS_PREPARE_SQL = """
+CREATE TEMP TABLE addr_points ON COMMIT DROP AS
+SELECT street, housenumber, postcode,
+       ST_PointOnSurface(ST_SetSRID(ST_GeomFromGeoJSON(gj), 4326))::geometry(Point, 4326) AS geom
+  FROM addr_points_raw;
+CREATE TEMP TABLE addr_streets ON COMMIT DROP AS
+SELECT name, ST_SetSRID(ST_GeomFromGeoJSON(gj), 4326)::geometry(Geometry, 4326) AS geom
+  FROM addr_streets_raw;
+DROP TABLE addr_points_raw, addr_streets_raw;
+CREATE INDEX ON addr_points  USING gist (geom);
+CREATE INDEX ON addr_streets USING gist (geom);
+ANALYZE addr_points;
+ANALYZE addr_streets;
+"""
+
+# Search box around each spot, in degrees. 0.0012° is >= 77 m east-west
+# anywhere in Germany (47-55°N) and >= 133 m north-south, so it always
+# contains the 60 m radius. The "&&" box filter guarantees a GiST index
+# lookup per spot: without it, on real Berlin data (451k address points)
+# the planner chose a full scan + sort per spot and one city took hours.
+_ADDRESS_SEARCH_DEG = 0.0012
+
+# Two steps for the whole city (both in the caller's transaction):
+#   1. search: each spot's nearest address point / named street into a small
+#      temp table. Candidates come from the box; "<->" ranks them; the exact
+#      distance is then measured in metres on the geography.
+#   2. write: update parking_spots only where the result differs. Each row
+#      carries its full OSM tags and geometry, so rewriting all of a city's
+#      spots on every import was what made the first version take hours.
+# Only spots without an own address (rules 1-2) are considered; a stale
+# nearest-rule address is replaced or cleared. No candidate gives a NULL
+# distance, and NULL <= 60 is not true, so it falls through.
+_ASSIGN_ADDRESSES_SQL = f"""
+DROP TABLE IF EXISTS addr_assign;
+CREATE TEMP TABLE addr_assign ON COMMIT DROP AS
+SELECT ps.id,
+       CASE WHEN a.d <= {_ADDRESS_MAX_M} THEN a.street
+            WHEN s.d <= {_ADDRESS_MAX_M} THEN s.name END                          AS street,
+       CASE WHEN a.d <= {_ADDRESS_MAX_M} THEN a.housenumber END                   AS housenumber,
+       CASE WHEN a.d <= {_ADDRESS_MAX_M} THEN a.postcode END                      AS postcode,
+       CASE WHEN a.d <= {_ADDRESS_MAX_M} THEN 'nearest_address'
+            WHEN s.d <= {_ADDRESS_MAX_M} THEN 'nearest_street' END                AS source,
+       CASE WHEN a.d <= {_ADDRESS_MAX_M} THEN a.d
+            WHEN s.d <= {_ADDRESS_MAX_M} THEN s.d END::real                       AS distance_m
+  FROM parking_spots ps
+  LEFT JOIN LATERAL (
+      SELECT ap.street, ap.housenumber, ap.postcode,
+             ST_Distance(ps.location::geography, ap.geom::geography) AS d
+        FROM addr_points ap
+       WHERE ap.geom && ST_Expand(ps.location, {_ADDRESS_SEARCH_DEG})
+       ORDER BY ap.geom <-> ps.location LIMIT 1
+  ) a ON true
+  LEFT JOIN LATERAL (
+      SELECT st.name, ST_Distance(ps.location::geography, st.geom::geography) AS d
+        FROM addr_streets st
+       WHERE st.geom && ST_Expand(ps.location, {_ADDRESS_SEARCH_DEG})
+       ORDER BY st.geom <-> ps.location LIMIT 1
+  ) s ON true
+ WHERE ps.city_id = %(city_id)s
+   AND (ps.address_source IS NULL OR ps.address_source IN ('nearest_address', 'nearest_street'));
+
+UPDATE parking_spots ps SET
+    address_street      = n.street,
+    address_housenumber = n.housenumber,
+    address_postcode    = n.postcode,
+    address_source      = n.source,
+    address_distance_m  = n.distance_m
+  FROM addr_assign n
+ WHERE ps.id = n.id
+   AND (ps.address_street, ps.address_housenumber, ps.address_postcode, ps.address_source, ps.address_distance_m)
+       IS DISTINCT FROM (n.street, n.housenumber, n.postcode, n.source, n.distance_m);
+"""
+
+
+def _address_point(props: dict) -> tuple[str, str, str | None] | None:
+    """An OSM address usable for "near Street No": needs a street and a number."""
+    street, number = props.get("addr:street"), props.get("addr:housenumber")
+    if not street or not number:
+        return None
+    return street, number, props.get("addr:postcode") or None
+
+
+def _street_name(props: dict) -> str | None:
+    """A named street a driver could be on; None for footways, paths, etc."""
+    name, highway = props.get("name"), props.get("highway")
+    if not name or not highway or highway in _NON_CAR_HIGHWAYS:
+        return None
+    return name
+
+
+def _copy_text(value: str | None) -> str:
+    if value is None:
+        return "\\N"
+    return value.replace("\\", "\\\\").replace("\t", " ").replace("\n", " ").replace("\r", " ")
+
+
+def _assign_addresses(dsn: str, city: str, city_id: str, source: Path) -> None:
+    """Rules 3-4 for one city, from the same (bbox-clipped) PBF as the spots.
+    Address points and streets live only in temp tables for this run."""
+    points_pbf = _DATA / f"{city}-addr-points.osm.pbf"
+    streets_pbf = _DATA / f"{city}-addr-streets.osm.pbf"
+    points_seq = _DATA / f"{city}-addr-points.geojsonseq"
+    streets_seq = _DATA / f"{city}-addr-streets.geojsonseq"
+    for expr, pbf, seq, types in (
+        ("nwr/addr:housenumber", points_pbf, points_seq, "point,polygon,multipolygon"),
+        ("w/highway", streets_pbf, streets_seq, "linestring"),
+    ):
+        subprocess.run(["osmium", "tags-filter", str(source), expr, "--overwrite", "-o", str(pbf)],
+                       check=True, capture_output=True)
+        subprocess.run(["osmium", "export", str(pbf), f"--geometry-types={types}", "--overwrite",
+                        "-f", "geojsonseq", "-o", str(seq)], check=True, capture_output=True)
+
+    points, streets = io.StringIO(), io.StringIO()
+    n_points = n_streets = 0
+    for feat in _iter_features(points_seq):
+        hit = _address_point(feat.get("properties") or {})
+        if hit and feat.get("geometry"):
+            street, number, postcode = hit
+            points.write("\t".join(_copy_text(v) for v in (street, number, postcode, json.dumps(feat["geometry"]))) + "\n")
+            n_points += 1
+    for feat in _iter_features(streets_seq):
+        name = _street_name(feat.get("properties") or {})
+        if name and feat.get("geometry"):
+            streets.write("\t".join(_copy_text(v) for v in (name, json.dumps(feat["geometry"]))) + "\n")
+            n_streets += 1
+    points.seek(0)
+    streets.seek(0)
+    # Recreated on every import; Berlin's alone are ~380 MB.
+    for leftover in (points_pbf, streets_pbf, points_seq, streets_seq):
+        leftover.unlink(missing_ok=True)
+
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        # A runaway step must die in Postgres, not live on orphaned if this
+        # process goes away (it did: hours, after the Mac slept mid-run).
+        cur.execute("SET LOCAL statement_timeout = '15min'")
+        cur.execute(_ADDRESS_TEMP_TABLES_SQL)
+        cur.copy_from(points, "addr_points_raw", columns=("street", "housenumber", "postcode", "gj"))
+        cur.copy_from(streets, "addr_streets_raw", columns=("name", "gj"))
+        cur.execute(_ADDRESS_PREPARE_SQL)
+        cur.execute(_ASSIGN_ADDRESSES_SQL, {"city_id": city_id})
+        cur.execute(
+            "SELECT coalesce(address_source, 'none'), count(*) FROM parking_spots "
+            "WHERE city_id = %s GROUP BY 1 ORDER BY 1", (city_id,)
+        )
+        counts = ", ".join(f"{source}={n}" for source, n in cur.fetchall())
+        conn.commit()  # temp tables drop here
+    click.echo(f"  address  {n_points} address points, {n_streets} named streets → {counts}")
 
 
 def _import_rows(dsn: str, city_id: str, path: Path) -> tuple[int, int]:
