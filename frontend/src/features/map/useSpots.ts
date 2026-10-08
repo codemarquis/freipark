@@ -10,7 +10,7 @@ import { posthogLogger } from '../../lib/posthogLogger';
 const EMPTY: SpotsGeoJSON = { type: 'FeatureCollection', features: [] };
 
 // Initial fetch covers central Berlin so spots appear before the user pans.
-const BERLIN_INITIAL: Bbox = {
+export const BERLIN_INITIAL: Bbox = {
   min_lon: 13.28,
   min_lat: 52.47,
   max_lon: 13.53,

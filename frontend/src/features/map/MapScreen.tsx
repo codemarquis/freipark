@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { NativeSyntheticEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Camera, Map, UserLocation } from '@maplibre/maplibre-react-native';
-import type { CameraRef, StyleSpecification } from '@maplibre/maplibre-react-native';
+import type { CameraRef, StyleSpecification, ViewStateChangeEvent } from '@maplibre/maplibre-react-native';
 import * as Location from 'expo-location';
 import protomapsLayers from 'protomaps-themes-base';
 import { withNoSpaceFontStacks } from '../../lib/fonts';
@@ -10,6 +11,10 @@ import { posthog } from '../../lib/posthog';
 import { useSpots } from './useSpots';
 import { useRoute } from './useRoute';
 import { SpotLayer } from './SpotLayer';
+import { RoadEventsLayer } from './RoadEventsLayer';
+import type { RoadEventProperties } from './RoadEventsLayer';
+import { RoadEventSheet } from './RoadEventSheet';
+import { useRoadEvents } from './useRoadEvents';
 import { RouteLayer } from './RouteLayer';
 import { SearchBar } from './SearchBar';
 import { SpotDetailSheet } from './SpotDetailSheet';
@@ -66,7 +71,11 @@ export function MapScreen() {
   const [locationLoading, setLocationLoading] = useState(true);
   const [locationDenied, setLocationDenied] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const { geojson, onRegionDidChange, refetch } = useSpots();
+  const { geojson, onRegionDidChange: onSpotsRegionChange, refetch } = useSpots();
+  const roadEvents = useRoadEvents();
+  const [selectedRoadEvent, setSelectedRoadEvent] = useState<RoadEventProperties | null>(null);
+  // When one tap hits a spot and a roadworks line, the spot wins.
+  const lastSpotPressAt = useRef(0);
   const [settingsVisible, setSettingsVisible] = useState(false);
   // One sign-in sheet for the screen: opened from Settings' "Sign in" and by
   // a signed-out tap on a report button in SpotDetailSheet.
@@ -125,8 +134,30 @@ export function MapScreen() {
       parking_spot_type: spot.spot_type,
       has_capacity: spot.capacity != null,
     });
+    lastSpotPressAt.current = Date.now();
+    setSelectedRoadEvent(null);
     setSelectedSpot(spot);
   }, []);
+
+  const onRegionDidChange = useCallback(
+    (event: NativeSyntheticEvent<ViewStateChangeEvent>) => {
+      onSpotsRegionChange(event);
+      roadEvents.onRegionDidChange(event);
+    },
+    [onSpotsRegionChange, roadEvents.onRegionDidChange],
+  );
+
+  const handleRoadEventPress = useCallback(
+    (tapped: RoadEventProperties) => {
+      // Wait a tick: if the same tap also hit a spot, its handler runs too.
+      setTimeout(() => {
+        if (Date.now() - lastSpotPressAt.current < 400) return;
+        setSelectedSpot(null);
+        setSelectedRoadEvent(roadEvents.eventById(tapped.id) ?? tapped);
+      }, 0);
+    },
+    [roadEvents.eventById],
+  );
 
   const handleSheetClose = useCallback(() => {
     setSelectedSpot(null);
@@ -157,6 +188,8 @@ export function MapScreen() {
         />
         {!locationDenied && <UserLocation />}
         <RouteLayer geometry={route.data?.geometry ?? null} />
+        {/* Drawn before the spots so lines sit underneath the markers. */}
+        <RoadEventsLayer geojson={roadEvents.geojson} onEventPress={handleRoadEventPress} />
         <SpotLayer
           geojson={geojson}
           onSpotPress={handleSpotPress}
@@ -209,6 +242,7 @@ export function MapScreen() {
         onReported={refetch}
         onSignInRequired={() => setSignInVisible(true)}
       />
+      <RoadEventSheet event={selectedRoadEvent} onClose={() => setSelectedRoadEvent(null)} />
       <SettingsSheet
         visible={settingsVisible}
         onClose={() => setSettingsVisible(false)}

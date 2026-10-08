@@ -2263,7 +2263,23 @@ App
 
 ### RC6 — Sheet, fetching and taps
 
-- [ ] **RC6: `useRoadEvents` (with the spots' debounced bbox) + `RoadEventSheet` + tap wiring**
+- [x] **RC6: `useRoadEvents` (with the spots' debounced bbox) + `RoadEventSheet` + tap wiring — done 2026-10-08; not yet on screen (RCC1).**
+  15 tests written first (modules missing), then passing. Hook: initial
+  Berlin fetch → GeoJSON (geometry parsed, rows validated; bad geometry /
+  unknown kind skipped); error → empty; debounced fetch on map move;
+  **no fetch below zoom 9** (uses the event's `zoom`; lines cleared,
+  in-flight request made stale); late answers ignored; `eventById` for
+  taps, because MapLibre can flatten list properties like `description`
+  in a tapped feature. Sheet: type label in the kind's colour, title
+  (skipped when empty), direction, "until …" in the user's language
+  (German local time, with a fallback for an Intl without `timeZone`),
+  description lines, source credit (Autobahn / OSM). `MapScreen`: one
+  region handler feeds spots and road events; road layer drawn before
+  spots (lines under markers); a tap hitting both prefers the spot (the
+  line tap waits a tick and is dropped if a spot was tapped < 400 ms
+  ago); opening one sheet closes the other. `BERLIN_INITIAL` now
+  exported from `useSpots` (shared, not copied). Frontend 236/236 across
+  19 suites, `tsc` exit 0, no `any`.
   - Sheet: type label, title, direction, "until …" when known, description lines, source credit
   - Acceptance: hook (fetch, stale-response guard, error → empty); sheet per kind, with/without end
     date; tapping a line opens it, tapping a spot still opens the spot sheet
