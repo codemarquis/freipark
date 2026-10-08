@@ -2017,7 +2017,7 @@ Frontend                                                                    │
 
 ### ST1 — Translations
 
-- [ ] **ST1: `settings.*` keys in de/en/tr**
+- [x] **ST1: `settings.*` keys in de/en/tr — done 2026-10-08.** Parity test failed first (3/3), then passed; frontend 203/203. Formal register (DE *Sie*-free labels, TR "Giriş yapın…") to match existing strings.
   - `settings.title`, `settings.account`, `settings.language`, `settings.signInOrCreate`, `settings.a11y`
   - Acceptance: key-parity test across the three locales; no empty strings
   - Verify: `npx jest`

@@ -87,5 +87,12 @@
     "errorRateLimitedHourly": "Zu viele Meldungen. Bitte versuchen Sie es später erneut.",
     "errorLocationUnavailable": "Ihr Standort konnte nicht ermittelt werden.",
     "errorUnknown": "Die Meldung konnte nicht gesendet werden. Bitte versuchen Sie es erneut."
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "account": "Konto",
+    "language": "Sprache",
+    "signInOrCreate": "Anmelden oder Konto erstellen",
+    "a11y": "Einstellungen"
   }
 }

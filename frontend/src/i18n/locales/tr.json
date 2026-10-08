@@ -87,5 +87,12 @@
     "errorRateLimitedHourly": "Çok fazla bildirim. Lütfen daha sonra tekrar deneyin.",
     "errorLocationUnavailable": "Konumunuz alınamadı.",
     "errorUnknown": "Bildirim gönderilemedi. Lütfen tekrar deneyin."
+  },
+  "settings": {
+    "title": "Ayarlar",
+    "account": "Hesap",
+    "language": "Dil",
+    "signInOrCreate": "Giriş yapın veya hesap oluşturun",
+    "a11y": "Ayarlar"
   }
 }

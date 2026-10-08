@@ -87,5 +87,12 @@
     "errorRateLimitedHourly": "Too many reports. Please try again later.",
     "errorLocationUnavailable": "Couldn't get your location.",
     "errorUnknown": "Couldn't send the report. Please try again."
+  },
+  "settings": {
+    "title": "Settings",
+    "account": "Account",
+    "language": "Language",
+    "signInOrCreate": "Sign in or create account",
+    "a11y": "Settings"
   }
 }
