@@ -2100,3 +2100,118 @@ Frontend                                                                    │
   account" → sign-in sheet (and only one sheet visible); signed in (session injected as in C1) →
   email, Sign out works; language switch updates the whole UI and survives an app restart; report
   buttons still open the sign-in sheet when signed out.
+
+---
+
+# Implementation Plan: road-closures module
+
+**Spec:** [SPEC-road-closures.md](../SPEC-road-closures.md) (approved 2026-10-08)
+**Module:** `road-closures`
+**Build position:** after `settings`; depends on `infra` and `map`.
+
+> **Status (2026-10-08):** planned, nothing built. **Release blocker:**
+> confirm the Autobahn API's reuse terms before shipping to users.
+
+## Dependency Graph
+
+```
+DB + ingestion (local stack only)
+[RC1] migration 011 + road_events_in_bbox ──┬──→ [RC2] Autobahn fetcher ──→ [RC3] local live sweep
+                                            └──→ [RC4] OSM construction import
+App
+[RC5] layer + translations ──→ [RC6] RoadEventSheet + fetch/tap wiring
+                                        │
+                     ── Checkpoint RCC1: simulator, local stack ──
+                                        │
+                     [RC7] production: 011, rebuild api, cron, OSM transfer (ask first)
+```
+
+- RC2 and RC4 both need RC1's table; independent of each other.
+- RC5 needs only the agreed RPC shape → can run alongside RC2–RC4.
+- RC7 is the only production task.
+
+## Risks
+
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| API outage or partial sweep wipes the layer | Medium | Remove stale rows only when ≥ 95% of requests succeeded; tested |
+| Autobahn API format changes | Medium | Parser skips unknown types/malformed items and logs them; tests use real captured items |
+| Being rude to a free public API | Low | One sweep per 30 min, 0.2 s between requests, honest `User-Agent` with contact |
+| Temp-table-then-UPDATE planner trap (the SA3 lesson) | Low | Plain upsert into an indexed table; no temp table updated before indexing |
+| Line layer under markers hides taps on spots / vice versa | Medium | Lines below markers; tap handler checks markers first; checked in RCC1 |
+| Map noise at country zoom | Low | `minzoom` 9 |
+| `api` image on the OVH box lacks the new script | High if forgotten | RC7 rebuilds `api` before installing cron; cron command verified by a manual run first |
+| Licence unclear | Known | Release blocker in this plan; source credit in the sheet |
+
+## Tasks
+
+### RC1 — Migration `011` and the read RPC
+
+- [ ] **RC1: `supabase/migrations/011_road_events.sql` + DB tests**
+  - Table, CHECKs, unique `(source, source_id)`, GiST index, RLS on, no client grants;
+    `road_events_in_bbox` (SECURITY DEFINER, pinned search_path, EXECUTE to anon/authenticated)
+    returning GeoJSON geometry
+  - Acceptance: bbox filter; anon can call the RPC but can't read/write the table; CHECKs reject
+    unknown source/kind; re-run safe
+  - Verify: `FREIPARK_DB_WRITE_TESTS=1 pytest tests/test_road_events.py`
+  - Files: `supabase/migrations/011_road_events.sql`, `backend/tests/test_road_events.py`
+
+### RC2 — Autobahn fetcher
+
+- [ ] **RC2: `backend/scripts/fetch_autobahn.py`**
+  - Pure parser (`display_type` → kind; end-date from description; trim/dedupe roads; skip
+    malformed) + sweep (httpx, 0.2 s spacing, timeouts, UA) + one-transaction upsert + guarded
+    stale-row removal (≥ 95% success) + per-kind log
+  - Acceptance: parser unit tests on real captured items (all four types + unknown + malformed);
+    DB tests for upsert, update-in-place, stale removal on success, **nothing removed on < 95%**
+  - Verify: `pytest tests/test_fetch_autobahn.py`; `FREIPARK_DB_WRITE_TESTS=1 pytest`
+  - Files: `backend/scripts/fetch_autobahn.py`, `backend/tests/test_fetch_autobahn.py`,
+    `backend/tests/fixtures/autobahn_items.json`
+
+### RC3 — Local live sweep
+
+- [ ] **RC3: run the fetcher once against the real API into the local DB**
+  - Acceptance: counts per kind ≈ the live API (within failed requests); A100 roadworks present;
+    a second run updates in place (row count stable)
+  - Files: none (data); results recorded here
+
+### RC4 — OSM construction import
+
+- [ ] **RC4: `backend/scripts/import_osm_construction.py` for the 16 cached state extracts**
+  - Car-road `construction=*` only; `opening_date` → `ends_at`; source_id `way/<id>`; upsert;
+    OSM rows no longer present are removed (full re-import semantics)
+  - Acceptance: filter unit tests (car roads kept; footway/path/cycleway/steps/track/bridleway/
+    pedestrian dropped); a local run over all states with counts logged
+  - Files: `backend/scripts/import_osm_construction.py`, `backend/tests/test_import_osm_construction.py`
+
+### RC5 — Map layer and translations
+
+- [ ] **RC5: `RoadEventsLayer` + `roadEvents.*` keys (de/en/tr)**
+  - Line paint per kind (colour, width, dash) as in the spec; `minzoom` 9; below spot markers
+  - Acceptance: paint/filters asserted via the MapLibre mock (as `SpotLayer.test.tsx`); key parity
+  - Files: `frontend/src/features/map/RoadEventsLayer.tsx`, `frontend/__tests__/RoadEventsLayer.test.tsx`,
+    `frontend/src/i18n/locales/{de,en,tr}.json`
+
+### RC6 — Sheet, fetching and taps
+
+- [ ] **RC6: `useRoadEvents` (with the spots' debounced bbox) + `RoadEventSheet` + tap wiring**
+  - Sheet: type label, title, direction, "until …" when known, description lines, source credit
+  - Acceptance: hook (fetch, stale-response guard, error → empty); sheet per kind, with/without end
+    date; tapping a line opens it, tapping a spot still opens the spot sheet
+  - Files: `frontend/src/features/map/useRoadEvents.ts`, `frontend/src/features/map/RoadEventSheet.tsx`,
+    `frontend/src/features/map/MapScreen.tsx`, tests for the hook and sheet (6–7 files: hook, sheet,
+    screen wiring and their tests belong together)
+
+### Checkpoint RCC1 — simulator, local stack
+
+- [ ] **RCC1:** A100 roadworks visible in Berlin with the right colour; tap → sheet; a closure and an
+  OSM construction way look distinct; spot taps unaffected; nothing drawn below zoom 9.
+
+### RC7 — Production (ask first)
+
+- [ ] **RC7: `011`, rebuild `api`, Autobahn cron, OSM construction transfer**
+  - Order: backup → `011` → `docker compose up -d --build api` → one manual sweep in the container
+    (verify counts) → install `*/30 * * * *` cron → OSM rows transferred (Mac → server, as before)
+  - Rollback: a tested `rollback_011_road_events.sql` (function, table) written before applying; the
+    cron line taken out
+  - **Before users see it:** Autobahn reuse terms confirmed
