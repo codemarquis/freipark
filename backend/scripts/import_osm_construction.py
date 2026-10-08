@@ -17,7 +17,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterator
 from zoneinfo import ZoneInfo
@@ -38,6 +38,10 @@ CAR_ROADS = frozenset({
     "unclassified", "residential", "living_street", "service", "road",
 })
 
+# A way whose opening date passed more than this long ago is most likely
+# open already, with OSM not yet updated (2% of ways on 2026-10-08).
+STALE_AFTER = timedelta(days=30)
+
 _OPENING_DATE = re.compile(r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$")
 
 
@@ -54,7 +58,7 @@ def parse_opening_date(value: str) -> datetime | None:
         return None
 
 
-def parse_way(feature: dict) -> dict | None:
+def parse_way(feature: dict, now: datetime | None = None) -> dict | None:
     """One exported OSM feature → a road_events row, or None if it doesn't count."""
     props = feature.get("properties") or {}
     geometry = feature.get("geometry")
@@ -63,6 +67,8 @@ def parse_way(feature: dict) -> dict | None:
     if props.get("construction") not in CAR_ROADS or not geometry:
         return None
     opening = parse_opening_date(props.get("opening_date", ""))
+    if opening and opening < (now or datetime.now(BERLIN)) - STALE_AFTER:
+        return None
     name, ref = props.get("name"), props.get("ref")
     return {
         "source_id": f"way/{props.get('@id')}",

@@ -183,7 +183,7 @@ def events_for(*display_types):
 
 def stored(cur):
     cur.execute("SELECT source, source_id, kind, title FROM road_events "
-                "WHERE source_id LIKE ANY(%s) OR source = 'osm' ORDER BY kind",
+                "WHERE source_id LIKE ANY(%s) ORDER BY kind",
                 ([f["item"]["identifier"] for f in FIXTURES.values()] + ["osm-test-%"],))
     return cur.fetchall()
 

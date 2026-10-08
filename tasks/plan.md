@@ -2229,9 +2229,13 @@ App
   direction "Wedding -> Wilmersdorf", which a *real* A100 item (loaded
   in RC3) also has; renamed to a direction that can't occur. Backend
   190/190.
-  **Open product question:** 136 ways (2%) have an opening date > 30
-  days in the past (e.g. Dolomitenstraße, 2025-08-28) — likely open,
-  OSM not updated. Proposed: skip those at import.
+  **Decided 2026-10-08 and done:** ways whose opening date is more than
+  30 days past are skipped at import (likely open, OSM not updated).
+  5 tests (31 days ago skipped; 29 days ago, future and no date kept)
+  failed first, then passed. Re-run: **6,290 ways, the 136 stale ones
+  removed** (e.g. Dolomitenstraße, 2025-08-28). Also scoped an RC2 test
+  helper to its own rows — it read *every* OSM row, which broke once real
+  OSM data was loaded. Backend 195/195.
   - Car-road `construction=*` only; `opening_date` → `ends_at`; source_id `way/<id>`; upsert;
     OSM rows no longer present are removed (full re-import semantics)
   - Acceptance: filter unit tests (car roads kept; footway/path/cycleway/steps/track/bridleway/

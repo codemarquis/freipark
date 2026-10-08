@@ -186,3 +186,23 @@ def test_read_extract_runs_the_real_osmium_pipeline(tmp_path, monkeypatch):
     events = oc.read_extract(pbf)
     assert [(e["source_id"], e["title"]) for e in events] == [("way/100", "Teststraße")]
     assert sorted(p.name for p in tmp_path.iterdir()) == ["tiny-latest.osm.pbf", "tiny.osm"]  # intermediates gone
+
+
+# --- Opening date long past → probably open already ----------------------------
+
+NOW = datetime(2026, 10, 8, 12, 0, tzinfo=BERLIN)
+
+
+@pytest.mark.parametrize(
+    ("opening_date", "kept"),
+    [
+        ("2025-08-28", False),   # > 30 days ago: OSM most likely just not updated
+        ("2026-09-07", False),   # 31 days ago
+        ("2026-09-09", True),    # 29 days ago: may well still be finishing
+        ("2027-05-14", True),    # future
+        (None, True),            # no opening date
+    ],
+)
+def test_ways_whose_opening_date_is_long_past_are_skipped(opening_date, kept):
+    tags = {"construction": "primary"} | ({"opening_date": opening_date} if opening_date else {})
+    assert (oc.parse_way(way(**tags), now=NOW) is not None) is kept

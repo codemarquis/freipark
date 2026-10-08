@@ -111,7 +111,7 @@ it up):
 `highway=construction` ways whose `construction=*` is a car road type
 (motorway … residential, service, living_street; **not** footway, path,
 cycleway, steps, track, bridleway, pedestrian), from the 16 state
-extracts already cached for the parking import. Run alongside
+extracts already cached for the parking import. Ways whose `opening_date` is more than 30 days past are skipped (most likely open already; OSM not yet updated — 2% of ways on 2026-10-08). Run alongside
 `import_all.py` (same cadence, same Mac → production transfer pattern as
 the parking data). `ends_at` from `opening_date` when present.
 
