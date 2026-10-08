@@ -2,7 +2,7 @@
 
 **Module:** `parking-rules`
 **Capability map:** [CLAUDE.md](CLAUDE.md) → after `analytics-consent`. Depends on `map` (spot sheet, `spot_details`) and the OSM import (raw tags already stored in `parking_spots.tags`). No new external service.
-**Status:** Proposed 2026-10-08 — awaiting approval.
+**Status:** Approved 2026-10-08 (open-question defaults accepted) — tasks in `tasks/plan.md` § Implementation Plan: parking-rules.
 
 ---
 
@@ -196,7 +196,7 @@ verification, sign photos, contributing to OSM.
 
 ## Open Questions
 
-| Question | Proposed default |
+| Question | Decided 2026-10-08 (defaults accepted) |
 |---|---|
 | Colour map markers by the current rule (green/amber/purple/red)? | **Later (v2).** Needs `rule_tags` in `spots_in_bbox`, i.e. a bigger payload on every pan. Sheet first; measure use. |
 | Public holidays (`PH`)? | **Unknown in v1.** 225 of 19,755 conditional tags on Berlin parking features (1.1 %) mention `PH`; a holiday table per state later. |

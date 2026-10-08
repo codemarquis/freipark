@@ -2359,3 +2359,104 @@ Decided: keep both, disclose, ask first.
   tap on a line next to a cluster zooms into the cluster instead. Intended precedence; no change.
 - Autobahn reuse terms: none published (bund.dev spec lists only kontakt@autobahn.de); permission
   asked by email, layer ships with the credit; if refused, stop the cron and empty the Autobahn rows.
+
+---
+
+## Implementation Plan: parking-rules ([SPEC-parking-rules.md](../SPEC-parking-rules.md))
+
+Approved 2026-10-08. One line on the spot sheet saying what applies now and until when, from the OSM
+tags already in `parking_spots.tags`, evaluated on the phone. Berlin first (92 % of curb tagged);
+elsewhere "Rules unknown — check the signs".
+
+**Dependency graph**
+
+```
+PR1 spot_type fix (import + 012 UPDATE) ─┐
+PR2 spot_details v2: rule_tags (012) ────┼──→ PR5 sheet line ──→ PRC1 simulator + accuracy sample ──→ PR6 production
+PR3 parser ──→ PR4 evaluator ────────────┘
+```
+
+PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can go in either order.
+**Needs Docker Desktop running** for PR1, PR2 and PRC1 (local DB).
+
+### Phase 1 — data
+
+- [ ] **PR1: street parking stored as `street`, not `lot`**
+  - `_spot_type`: `parking=street_side|lane|on_kerb|half_on_kerb|shoulder` → `street` (old
+    `parking:lane` rule kept); `migrations/012_spot_rules.sql` part 1: one-off
+    `UPDATE parking_spots SET spot_type='street' WHERE spot_type='lot' AND tags->>'parking' IN (…)`
+    (only rows that change).
+  - Acceptance: re-import and migration agree; `report_spot` uses 150 m for those spots (existing
+    `CASE` in 007, no change there); lot/garage cases unchanged.
+  - Verify: `cd backend && pytest -v` — new `_spot_type` cases; DB test (rolled back) that a
+    street-kind row becomes `street` and a `surface` lot stays `lot`; report-distance test at 200 m
+    for a street spot → `too_far`.
+  - Files: `backend/scripts/import_osm.py`, `supabase/migrations/012_spot_rules.sql`,
+    `backend/tests/test_import_osm.py`, `backend/tests/test_spot_rules.py`
+
+- [ ] **PR2: `spot_details` v2 returns `rule_tags`**
+  - Part 2 of `012`: `DROP` + recreate `spot_details(uuid)` with an extra `rule_tags jsonb` column =
+    only the allow-listed keys (`fee`, `fee:conditional`, `maxstay`, `maxstay:conditional`,
+    `restriction`, `restriction:conditional`, `zone`, `access`, `access:conditional`,
+    `authentication:disc`, `parking:disc`); same grants; `NOTIFY pgrst`.
+    `supabase/self-host/rollback_012_spot_rules.sql` restores the 010 function (spot types stay —
+    they're correct).
+  - Acceptance: other tags (name, operator, ref…) never returned; anon can call it; address columns
+    unchanged.
+  - Verify: DB tests (rolled back) for the allow-list, a spot with no rule tags → `{}`, grants;
+    rollback tested twice in a rolled-back transaction.
+  - Files: `012_spot_rules.sql`, `rollback_012_spot_rules.sql`, `backend/tests/test_spot_rules.py`
+
+### Phase 2 — rules engine (frontend, pure functions)
+
+- [ ] **PR3: `parseRules(tags) → SpotRules`**
+  - `src/features/rules/parseRules.ts`: the opening-hours subset in the spec (weekday ranges/lists,
+    several time ranges, `24:00`, `;`, bare weekdays, `off`); `"3 hours"`/`"180"`/`"2 h"` maxstay;
+    anything else → `unknown`. Strict types, no `any`.
+  - Acceptance: the 12 most frequent real Berlin values parse to the right windows; nothing unknown
+    ever becomes a window.
+  - Verify: `npx jest parseRules` (table-driven, real values verbatim incl. `;Sa` spacing variant,
+    `PH` → unknown); `npx tsc --noEmit`.
+  - Files: `parseRules.ts`, `__tests__/parseRules.test.ts`
+
+- [ ] **PR4: `ruleNow(rules, now) → { state, until, next, details }`**
+  - `src/features/rules/ruleNow.ts`: wall-clock time in `Europe/Berlin` via `Intl` (no new
+    dependency); precedence restriction → residents → paid → free → unknown; next change within 7
+    days; maxstay/disc details.
+  - Acceptance: correct at 08:59/09:00/19:59/20:00, Saturday 18:00, Sunday, midnight; both DST
+    weekends; unknown in → unknown out.
+  - Verify: `npx jest ruleNow` with fixed instants (UTC strings), `tsc`.
+  - Files: `ruleNow.ts`, `__tests__/ruleNow.test.ts`
+
+### Phase 3 — UI
+
+- [ ] **PR5: rule line on the spot sheet**
+  - `useSpotDetails` reads `rule_tags` (validated; anything odd → `{}`); `RuleLine` component under
+    the type: coloured headline + details + disclaimer "From OpenStreetMap — signs on site take
+    precedence."; re-evaluates each minute while open; `rules.*` keys in de/en/tr.
+  - Acceptance: one headline per state (free/paid/residents/no parking/not public/unknown); disclaimer
+    always shown; works with no rule tags (unknown) and while details are loading.
+  - Verify: `npx jest` (RuleLine per state, sheet integration, key parity), `tsc`.
+  - Files: `useSpotDetails.ts`, `rules/RuleLine.tsx`, `SpotDetailSheet.tsx`, locales,
+    `__tests__/RuleLine.test.tsx`
+
+### Checkpoint PRC1 — simulator + accuracy, local stack
+
+- [ ] **PRC1:** Mitte paid street before/after 09:00 (simulator clock), a residents' zone, an outer
+  free street; street spots labelled as street. **Accuracy sample:** a script draws 200 random Berlin
+  spots with rule tags, prints tags → headline; review by hand; success criterion ≥ 95 % right and
+  0 unknown-shown-as-free/paid.
+
+### PR6 — production (ask first)
+
+- [ ] **PR6:** backup → `012` (the UPDATE touches street-kind rows in every city; count first) →
+  check `spot_details` as anon → app release carries the UI. Rollback: `rollback_012_spot_rules.sql`.
+
+**Risks**
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| A rule shown wrong → user gets a ticket | High | "unknown" over guessing; disclaimer always; accuracy sample in PRC1 |
+| The `UPDATE` (84k Berlin rows plus other cities) slow or locking on production | Medium | Only rows that change; off-peak; `statement_timeout`; backup first |
+| Timezone/DST bugs on devices in other zones | Medium | Evaluate via `Intl` in `Europe/Berlin`; DST tests for both weekends |
+| Berlin extract is from 2026-08-21 | Low | Separate monthly re-import task |
