@@ -42,7 +42,9 @@ extracts. "Curb-km" counts each side of a public car road separately.
 - **Tagging scheme:** 99.9 % uses the current `parking:left/right/both`
   scheme; the old `parking:lane:*` scheme is practically gone.
 - **The rules sit on the spots we already import.** Berlin also maps
-  street parking as 84,428 separate `amenity=parking` areas
+  street parking as about 42,200 separate `amenity=parking` areas
+  (84,428 features in the osmium export, which lists every closed way twice —
+  as a line and as an area; the percentages below are unaffected)
   (`parking=street_side|lane|on_kerb|half_on_kerb|shoulder`). Those carry:
 
   | Tag | Share of areas |
@@ -76,7 +78,7 @@ module.
 ### Bug found while measuring
 
 `import_osm._spot_type()` only recognises the old `parking:lane` tags,
-so all 84k Berlin street-parking areas are stored as **`lot`**. Effects:
+so all ~42k Berlin street-parking areas are stored as **`lot`**. Effects:
 the sheet says "Parking lot" for kerbside parking, and spot reports get
 the 300 m radius instead of 150 m. Fixed as part of this module (PR1).
 
@@ -128,7 +130,8 @@ the 300 m radius instead of 150 m. Fixed as part of this module (PR1).
   `2 h`, `90 min`); a bare number is unknown. Anything else (`PH`,
   months, sunrise, user-group conditions like `none @ residents`) goes to
   `unknown` — never guessed. **Measured on all of Berlin (PR3):** 2.8 % of
-  107,805 spots with rule tags have something unreadable, mostly tagging
+  107,805 exported features with rule tags (about 54,000 spots; the export
+  lists closed ways twice) have something unreadable, mostly tagging
   errors (`restriction=yes`, `maxstay=yes`), `none @ residents` and `PH`. Written in-house (~150 lines): the standard `opening_hours`
   JS library is LGPL-3.0, awkward inside an app bundle, and much larger
   than this needs.

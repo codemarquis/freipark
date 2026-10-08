@@ -10,7 +10,9 @@ import pytest
 from tests.conftest import act_as
 from tests.test_spot_reports import expect_error
 
-ADDRESS_COLUMNS = ["address_street", "address_housenumber", "address_postcode", "address_source", "city_name"]
+# 012 added rule_tags (SPEC-parking-rules.md); these spots have no rule tags.
+ADDRESS_COLUMNS = ["address_street", "address_housenumber", "address_postcode", "address_source", "city_name",
+                   "rule_tags"]
 SPOT_DETAILS = "SELECT * FROM spot_details(%s)"
 
 
@@ -48,14 +50,14 @@ def test_spot_details_returns_the_address_and_city(spots):
     act_as(cur, "anon")
     cur.execute(SPOT_DETAILS, (spots["with_address"],))
     assert [d.name for d in cur.description] == ADDRESS_COLUMNS
-    assert cur.fetchall() == [("Oranienstraße", "12", "10997", "nearest_address", "Berlin")]
+    assert cur.fetchall() == [("Oranienstraße", "12", "10997", "nearest_address", "Berlin", {})]
 
 
 def test_spot_details_returns_nulls_for_a_spot_without_an_address(spots):
     cur = spots["cur"]
     act_as(cur, "anon")
     cur.execute(SPOT_DETAILS, (spots["without_address"],))
-    assert cur.fetchall() == [(None, None, None, None, "Berlin")]
+    assert cur.fetchall() == [(None, None, None, None, "Berlin", {})]
 
 
 def test_spot_details_returns_no_row_for_an_unknown_spot(spots):

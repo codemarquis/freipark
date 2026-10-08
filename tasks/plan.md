@@ -2383,7 +2383,7 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 - [x] **PR1: street parking stored as `street`, not `lot` — done 2026-10-09.** `_spot_type` adds
   `STREET_PARKING_KINDS`; the "own name as address" rule stays tied to old `parking:lane` ways (only
-  16 of 84k Berlin street areas have a name, and it's the area's). `012` part 1 updates only rows that
+  about 8 of ~42k Berlin street areas have a name, and it's the area's). `012` part 1 updates only rows that
   change (131,426 locally, all cities). 11 new import cases (65/65) + 6 DB tests (rolled back); a test
   keeps the SQL and Python kind lists in sync. Dropping `half_on_kerb` from the SQL fails 2 tests.
   Backend 214/214. (Docker Desktop had hung; restarted 2026-10-09, local data intact.)
@@ -2399,7 +2399,16 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
   - Files: `backend/scripts/import_osm.py`, `supabase/migrations/012_spot_rules.sql`,
     `backend/tests/test_import_osm.py`, `backend/tests/test_spot_rules.py`
 
-- [ ] **PR2: `spot_details` v2 returns `rule_tags`**
+- [x] **PR2: `spot_details` v2 returns `rule_tags` — done 2026-10-09.** `012` part 2 drops and
+  recreates the function with `rule_tags jsonb` = allow-listed keys with text values only (filtered in
+  SQL, so name/operator/ref never leave the DB); grants unchanged; `NOTIFY pgrst`.
+  `rollback_012_spot_rules.sql` restores the 010 function (keeps part 1's spot types). DB tests:
+  allow-list for anon and authenticated, `{}` without rule tags, non-text values dropped, rollback
+  twice; `test_spot_address` updated for the new column. Applied to the **local** DB (UPDATE 131,426);
+  through the local API as anon a Savignyplatz spot returns `fee`, `zone=5`, `fee:conditional`.
+  Backend 219/219. **Count correction:** osmium's export lists every closed way twice (line + area),
+  so Berlin has ~42,200 street-parking areas (42,497 street spots in the DB), not 84k as first
+  written (the PR1 commit message says 84k); percentages are unaffected.
   - Part 2 of `012`: `DROP` + recreate `spot_details(uuid)` with an extra `rule_tags jsonb` column =
     only the allow-listed keys (`fee`, `fee:conditional`, `maxstay`, `maxstay:conditional`,
     `restriction`, `restriction:conditional`, `zone`, `access`, `access:conditional`,
@@ -2416,7 +2425,7 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 - [x] **PR3: `parseRules(tags) → SpotRules` — done 2026-10-08.** 39 tests (the 12 most frequent
   Berlin values verbatim, override vs additional rules, overnight, never-guess cases); a deliberate
-  break (no `off` handling) fails a test. Scan of all Berlin parking features: 2.8 % of 107,805 spots
+  break (no `off` handling) fails a test. Scan of all Berlin parking features: 2.8 % of 107,805 exported features (≈ 54k spots; closed ways appear twice in the export)
   with rule tags have an unreadable value (first pass 3.3 %; added `,`-separated rules and
   `access=permit`). Bare-number `maxstay` → unknown (no agreed unit).
   - `src/features/rules/parseRules.ts`: the opening-hours subset in the spec (weekday ranges/lists,
@@ -2479,6 +2488,6 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 | Risk | Impact | Mitigation |
 |---|---|---|
 | A rule shown wrong → user gets a ticket | High | "unknown" over guessing; disclaimer always; accuracy sample in PRC1 |
-| The `UPDATE` (84k Berlin rows plus other cities) slow or locking on production | Medium | Only rows that change; off-peak; `statement_timeout`; backup first |
+| The `UPDATE` (~42k Berlin rows plus other cities; 131k locally) slow or locking on production | Medium | Only rows that change; off-peak; `statement_timeout`; backup first |
 | Timezone/DST bugs on devices in other zones | Medium | Evaluate via `Intl` in `Europe/Berlin`; DST tests for both weekends |
 | Berlin extract is from 2026-08-21 | Low | Separate monthly re-import task |

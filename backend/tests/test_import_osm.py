@@ -30,7 +30,7 @@ def test_car_parking_is_kept(osm_type, amenity):
 
 @pytest.mark.parametrize("kind", ["street_side", "lane", "on_kerb", "half_on_kerb", "shoulder"])
 def test_street_parking_area_is_street_not_lot(kind):
-    # How Berlin maps kerbside parking: 84k separate areas (SPEC-parking-rules.md).
+    # How Berlin maps kerbside parking: ~42k separate areas (SPEC-parking-rules.md).
     row = import_osm._feature_to_row(feature("way", {"amenity": "parking", "parking": kind}), "city")
     assert row["spot_type"] == "street"
 

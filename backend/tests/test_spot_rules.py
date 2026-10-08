@@ -73,6 +73,94 @@ def test_other_spots_are_untouched(spots, key, expected):
     assert spot_type(cur, ids[key]) == expected
 
 
+ROLLBACK = Path(__file__).resolve().parents[2] / "supabase/self-host/rollback_012_spot_rules.sql"
+SPOT_DETAILS = "SELECT * FROM spot_details(%s)"
+DETAIL_COLUMNS = ["address_street", "address_housenumber", "address_postcode", "address_source", "city_name"]
+
+RICH_TAGS = {
+    "amenity": "parking", "parking": "street_side", "name": "Parkstreifen Nord", "operator": "Bezirksamt",
+    "ref": "P7", "capacity": "12", "orientation": "parallel",
+    "fee": "yes", "fee:conditional": "no @ (Mo-Sa 00:00-09:00; Su)", "zone": "23",
+    "maxstay": "2 hours", "access": "yes", "authentication:disc": "no",
+}
+ALLOWED = {"fee", "fee:conditional", "zone", "maxstay", "access", "authentication:disc"}
+
+
+def run_sql_file(cur, path: Path) -> None:
+    body = "\n".join(
+        line for line in path.read_text().splitlines()
+        if line.strip() not in ("BEGIN;", "COMMIT;") and not line.lstrip().startswith("--")
+    )
+    act_as(cur, "admin")
+    cur.execute(body)
+
+
+def add_spot(cur, tags) -> str:
+    act_as(cur, "admin")
+    cur.execute("SELECT id FROM cities WHERE slug = 'berlin'")
+    city_id = cur.fetchone()[0]
+    cur.execute(
+        """
+        INSERT INTO parking_spots (city_id, osm_id, osm_type, source, spot_type, access, location, tags)
+        VALUES (%s, -920100000 - (SELECT count(*) FROM parking_spots WHERE source = 'test'), 'way', 'test',
+                'street', NULL, ST_SetSRID(ST_MakePoint(13.4, 52.5), 4326), %s::jsonb)
+        RETURNING id
+        """,
+        (city_id, json.dumps(tags)),
+    )
+    return str(cur.fetchone()[0])
+
+
+def details(cur, spot_id: str, role: str = "anon"):
+    act_as(cur, role)
+    cur.execute(SPOT_DETAILS, (spot_id,))
+    return [d.name for d in cur.description], cur.fetchall()
+
+
+@pytest.mark.parametrize("role", ["anon", "authenticated"])
+def test_spot_details_returns_only_allow_listed_rule_tags(write_tx, role):
+    cur = write_tx
+    run_migration(cur)
+    spot = add_spot(cur, RICH_TAGS)
+    columns, rows = details(cur, spot, role)
+    assert columns == DETAIL_COLUMNS + ["rule_tags"]
+    rule_tags = rows[0][-1]
+    assert rule_tags == {k: v for k, v in RICH_TAGS.items() if k in ALLOWED}
+    for private in ("name", "operator", "ref", "capacity", "parking", "amenity"):
+        assert private not in rule_tags
+
+
+def test_rule_tags_are_empty_for_a_spot_without_any(write_tx):
+    cur = write_tx
+    run_migration(cur)
+    spot = add_spot(cur, {"amenity": "parking", "parking": "surface"})
+    _, rows = details(cur, spot)
+    assert rows[0][-1] == {}
+
+
+def test_non_text_values_are_left_out(write_tx):
+    cur = write_tx
+    run_migration(cur)
+    spot = add_spot(cur, {"fee": "yes", "maxstay": 120, "zone": None, "access": ["yes"]})
+    _, rows = details(cur, spot)
+    assert rows[0][-1] == {"fee": "yes"}
+
+
+def test_rollback_restores_the_010_function_and_can_run_twice(write_tx):
+    cur = write_tx
+    run_migration(cur)
+    spot = add_spot(cur, RICH_TAGS)
+    run_sql_file(cur, ROLLBACK)
+    run_sql_file(cur, ROLLBACK)
+    columns, rows = details(cur, spot)
+    assert columns == DETAIL_COLUMNS
+    assert len(rows[0]) == 5
+    # Part 1 stays: street parking areas remain street.
+    act_as(cur, "admin")
+    cur.execute("SELECT spot_type FROM parking_spots WHERE id = %s", (spot,))
+    assert cur.fetchone()[0] == "street"
+
+
 def test_migration_is_safe_to_rerun(spots):
     cur, ids = spots["cur"], spots["ids"]
     run_migration(cur)
