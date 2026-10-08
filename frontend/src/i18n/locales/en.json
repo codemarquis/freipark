@@ -142,6 +142,7 @@
     "disc": "Parking disc required",
     "zone": "Parking zone {{zone}} (permit holders exempt)",
     "incomplete": "Some rules couldn't be read",
-    "disclaimer": "From OpenStreetMap — signs on site take precedence."
+    "disclaimer": "From OpenStreetMap — signs on site take precedence.",
+    "permit": "Permit holders only"
   }
 }

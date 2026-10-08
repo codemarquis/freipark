@@ -2473,10 +2473,24 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 ### Checkpoint PRC1 — simulator + accuracy, local stack
 
-- [ ] **PRC1:** Mitte paid street before/after 09:00 (simulator clock), a residents' zone, an outer
+- [x] **PRC1:** Mitte paid street before/after 09:00 (simulator clock), a residents' zone, an outer
   free street; street spots labelled as street. **Accuracy sample:** a script draws 200 random Berlin
   spots with rule tags, prints tags → headline; review by hand; success criterion ≥ 95 % right and
   0 unknown-shown-as-free/paid.
+  **Done 2026-10-09.** *Accuracy:* 200 random Berlin spots with rule tags (`setseed(0.42)`, local DB)
+  through the real `parseRules → ruleNow → ruleText` at Thu 10:00 and 21:00; 43 distinct tag sets
+  reviewed: **200/200 match their tags, 0 unreadable shown as free/paid**; 189 informative, 11 (5.5 %)
+  "unknown" for the right reasons (`restriction=yes`, `permissive`/`yes` without fee, `employees`,
+  `none @ residents`, max stay without fee). This measures the app against OSM, not OSM against the
+  street. Found and fixed: midnight shown as "Fri 00:00" → "24:00" like the signs; "41;42" → "41, 42".
+  *Simulator (iPhone 17 Pro, local stack, Fri 00:13–00:18):* Karl-Liebknecht-Str. (zone 29,
+  `no @ (00:00-09:00)`) → "Street parking" + green "Free now · paid from 09:00" + zone + disclaimer;
+  Chancellery `access=permit` → said "Residents with a permit only" — wrong for a government permit →
+  new state `permit`, "Permit holders only", rechecked on screen; Nossener Str. (Hellersdorf) →
+  "Street parking" + green "Free". Consent sheet appeared on this simulator's first launch too. The
+  simulator can't change its clock, so 09:00/20:00 boundaries rest on PR4's tests. Frontend 340/340.
+  *Follow-up (UX):* the old static access label ("Paid parking") sits right above "Free now · paid
+  from 09:00"; consider hiding it when the rule line knows better.
 
 ### PR6 — production (ask first)
 

@@ -13,6 +13,7 @@ const TONE: Record<RuleState, RuleTone> = {
   free: 'free',
   paid: 'paid',
   residents: 'limited',
+  permit: 'limited',
   customers: 'limited',
   restricted: 'restricted',
   not_public: 'neutral',
@@ -23,8 +24,12 @@ const TIME_ZONE = 'Europe/Berlin';
 const berlinDay = (d: Date) =>
   new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 
-/** "20:00" today, "Mo. 09:00" on a later day — Berlin time, 24-hour like the signs. */
+/** "20:00" today, "24:00" for the coming midnight, "Mo. 09:00" on a later
+ *  day — Berlin time, 24-hour like the signs. */
 export function formatWhen(when: Date, now: Date, language: string): string {
+  const minuteBefore = new Date(when.getTime() - 60_000);
+  const isMidnight = berlinDay(minuteBefore) !== berlinDay(when);
+  if (isMidnight && berlinDay(minuteBefore) === berlinDay(now)) return '24:00';
   const sameDay = berlinDay(when) === berlinDay(now);
   return new Intl.DateTimeFormat(language, {
     timeZone: TIME_ZONE,
@@ -57,6 +62,8 @@ function headline(status: RuleStatus, t: TFunction, time: string | null): string
     }
     case 'residents':
       return t('rules.residents');
+    case 'permit':
+      return t('rules.permit');
     case 'customers':
       return t('rules.customers');
     case 'not_public':
@@ -79,7 +86,10 @@ export function ruleText(status: RuleStatus, t: TFunction, language: string, now
     );
   }
   if (status.disc) details.push(t('rules.disc'));
-  if (status.zone) details.push(t('rules.zone', { zone: status.zone }));
+  if (status.zone) {
+    const zone = status.zone.split(';').map((z) => z.trim()).filter(Boolean).join(', ');
+    details.push(t('rules.zone', { zone }));
+  }
   if (status.incomplete && status.state !== 'unknown') details.push(t('rules.incomplete'));
   return { headline: headline(status, t, time), tone: TONE[status.state], details };
 }

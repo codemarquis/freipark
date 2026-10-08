@@ -46,6 +46,22 @@ describe('RuleLine', () => {
     expect(screen.getByText(/^Free now · paid from Fri.*09:00$/)).toBeTruthy();
   });
 
+  it('says 24:00 for the coming midnight, like the signs (PRC1)', async () => {
+    // Real Berlin value: paid Mo-Sa 09:00-24:00.
+    await render(<RuleLine ruleTags={{ fee: 'yes', 'fee:conditional': 'no @ (Mo-Sa 00:00-09:00; Su)' }} />);
+    expect(screen.getByText('Paid now until 24:00 · then free')).toBeTruthy();
+  });
+
+  it('says "permit holders" for access=permit, not "residents" (PRC1)', async () => {
+    await render(<RuleLine ruleTags={{ access: 'permit' }} />);
+    expect(screen.getByText('Permit holders only')).toBeTruthy();
+  });
+
+  it('lists several zones readably (PRC1: "41;42")', async () => {
+    await render(<RuleLine ruleTags={{ fee: 'yes', zone: '41;42' }} />);
+    expect(screen.getByText('Parking zone 41, 42 (permit holders exempt)')).toBeTruthy();
+  });
+
   it('updates by itself when the minute ticks over a boundary', async () => {
     jest.setSystemTime(new Date('2026-10-08T17:59:30Z')); // Thu 19:59:30
     await render(<RuleLine ruleTags={BERLIN} />);

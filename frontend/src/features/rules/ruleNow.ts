@@ -11,7 +11,8 @@ export type RuleState =
   | 'restricted'   // no parking / no stopping / loading or charging only
   | 'not_public'   // access=no|private
   | 'customers'    // access=customers
-  | 'residents'    // access=residents|permit
+  | 'residents'    // access=residents
+  | 'permit'       // access=permit (any permit holder)
   | 'paid'
   | 'free'
   | 'unknown';
@@ -103,7 +104,7 @@ const ACCESS_STATE: Partial<Record<Access, RuleState>> = {
   private: 'not_public',
   customers: 'customers',
   residents: 'residents',
-  permit: 'residents',
+  permit: 'permit',
 };
 
 const hasUnknown = (rules: SpotRules, ...prefixes: string[]) =>

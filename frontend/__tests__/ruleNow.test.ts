@@ -69,7 +69,7 @@ describe('ruleNow — precedence', () => {
     ['no', 'not_public'],
     ['private', 'not_public'],
     ['customers', 'customers'],
-    ['permit', 'residents'],
+    ['permit', 'permit'], // any permit (PRC1: a government site), not only residents
   ])('access=%s → %s', (access, state) => {
     expect(ruleNow(parseRules({ access }), at('2026-10-08T08:00:00Z')).state).toBe(state);
   });

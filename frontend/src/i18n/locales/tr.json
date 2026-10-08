@@ -142,6 +142,7 @@
     "disc": "Park diski gerekli",
     "zone": "Park bölgesi {{zone}} (izin sahipleri muaf)",
     "incomplete": "Bazı kurallar okunamadı",
-    "disclaimer": "OpenStreetMap'ten — yerindeki tabelalar önceliklidir."
+    "disclaimer": "OpenStreetMap'ten — yerindeki tabelalar önceliklidir.",
+    "permit": "Yalnızca izin sahipleri"
   }
 }

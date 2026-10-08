@@ -142,6 +142,7 @@
     "disc": "Parkscheibe erforderlich",
     "zone": "Parkzone {{zone}} (Bewohner mit Ausweis frei)",
     "incomplete": "Einige Regeln konnten nicht gelesen werden",
-    "disclaimer": "Aus OpenStreetMap — die Beschilderung vor Ort hat Vorrang."
+    "disclaimer": "Aus OpenStreetMap — die Beschilderung vor Ort hat Vorrang.",
+    "permit": "Nur mit Parkberechtigung"
   }
 }
