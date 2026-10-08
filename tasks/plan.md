@@ -2409,7 +2409,11 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 ### Phase 2 — rules engine (frontend, pure functions)
 
-- [ ] **PR3: `parseRules(tags) → SpotRules`**
+- [x] **PR3: `parseRules(tags) → SpotRules` — done 2026-10-08.** 39 tests (the 12 most frequent
+  Berlin values verbatim, override vs additional rules, overnight, never-guess cases); a deliberate
+  break (no `off` handling) fails a test. Scan of all Berlin parking features: 2.8 % of 107,805 spots
+  with rule tags have an unreadable value (first pass 3.3 %; added `,`-separated rules and
+  `access=permit`). Bare-number `maxstay` → unknown (no agreed unit).
   - `src/features/rules/parseRules.ts`: the opening-hours subset in the spec (weekday ranges/lists,
     several time ranges, `24:00`, `;`, bare weekdays, `off`); `"3 hours"`/`"180"`/`"2 h"` maxstay;
     anything else → `unknown`. Strict types, no `any`.

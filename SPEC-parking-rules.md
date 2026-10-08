@@ -102,25 +102,34 @@ the 300 m radius instead of 150 m. Fixed as part of this module (PR1).
 - **`parseRules(tags) → SpotRules`** — strict types, no `any`:
 
   ```ts
-  type Window = { day: 0 | 1 | 2 | 3 | 4 | 5 | 6; from: number; to: number }; // minutes, 0–1440
+  type Day = 0 | 1 | 2 | 3 | 4 | 5 | 6;                    // Monday = 0
+  interface Window { day: Day; from: number; to: number }  // minutes, 0–1440
+  interface Conditional<T> { value: T; when: Window[] }    // "value @ (hours)"
   interface SpotRules {
     fee: 'yes' | 'no' | null;          // base value
-    feeWindows: { value: 'yes' | 'no'; when: Window[] }[];
+    feeWindows: Conditional<'yes' | 'no'>[];
     maxstayMin: number | null;
-    maxstayWhen: Window[] | null;      // null = always
+    maxstayWindows: Conditional<number>[];
+    restriction: Restriction | null;   // no_parking | no_stopping | loading_only | charging_only
+    restrictionWindows: Conditional<Restriction>[];
+    access: Access | null;             // yes | no | private | customers | residents | permit | …
+    accessWindows: Conditional<Access>[];
     disc: boolean;
     zone: string | null;               // residents' zone, e.g. "23"
-    restriction: 'no_parking' | 'no_stopping' | 'loading_only' | 'charging_only' | null;
-    restrictionWhen: Window[] | null;
-    unknown: string[];                 // raw values we couldn't read
+    unknown: string[];                 // "key=value" we couldn't read
   }
   ```
 
   Parses the opening-hours **subset** that covers the measured data:
-  weekday ranges and lists (`Mo-Fr`, `Sa,Su`), time ranges incl. `24:00`
-  and several per day, `;` rules, bare weekdays (`Su` = all day),
-  `off`. Anything else (`PH`, months, sunrise…) goes to `unknown` — never
-  guessed. Written in-house (~150 lines): the standard `opening_hours`
+  weekday ranges and lists (`Mo-Fr`, `Sa,Su`), time ranges incl. `24:00`,
+  overnight ranges and several per day, `;` rules (replace earlier ones
+  for their days), `,` before a weekday (additional rule), bare weekdays
+  (`Su` = all day), `off`, `24/7`. Durations need a unit (`3 hours`,
+  `2 h`, `90 min`); a bare number is unknown. Anything else (`PH`,
+  months, sunrise, user-group conditions like `none @ residents`) goes to
+  `unknown` — never guessed. **Measured on all of Berlin (PR3):** 2.8 % of
+  107,805 spots with rule tags have something unreadable, mostly tagging
+  errors (`restriction=yes`, `maxstay=yes`), `none @ residents` and `PH`. Written in-house (~150 lines): the standard `opening_hours`
   JS library is LGPL-3.0, awkward inside an app bundle, and much larger
   than this needs.
 - **`ruleNow(rules, now) → { headline, until, details[] }`** evaluated
