@@ -7,6 +7,8 @@ import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/typ
 import { posthog } from '../../lib/posthog';
 import { PaymentLinks } from './PaymentLinks';
 import { buildShareMessage } from './shareSpot';
+import { formatAddress, formatCoords } from './spotAddress';
+import { useSpotDetails } from './useSpotDetails';
 import { ReportButtons } from '../reports/ReportButtons';
 import { activeReport } from '../reports/reportStatus';
 import type { SubmittedReport } from '../reports/useReportSpot';
@@ -72,6 +74,8 @@ export function SpotDetailSheet({
   // Ticks once a minute so "N min ago" stays current and expired reports
   // disappear while the sheet is open.
   const [now, setNow] = useState(() => Date.now());
+  const details = useSpotDetails(spot?.id ?? null);
+  const addressText = details ? formatAddress(details, t) : null;
 
   useEffect(() => {
     if (!spot) return;
@@ -103,6 +107,7 @@ export function SpotDetailSheet({
           typeLabel: t(TYPE_LABEL_KEY[spot.spot_type]),
           accessLabel: spot.access ? t(ACCESS_LABEL_KEY[spot.access]) : t('spot.accessUnknown'),
           statusLine: statusText,
+          addressLine: addressText,
           lat: spot.lat,
           lon: spot.lon,
         }),
@@ -192,6 +197,10 @@ export function SpotDetailSheet({
                 {statusText}
               </Text>
             )}
+            {addressText && <Text style={styles.address}>{addressText}</Text>}
+            <Text style={styles.coords} selectable>
+              {formatCoords(spot.lat, spot.lon)}
+            </Text>
 
             {locationDenied ? (
               <Text style={styles.routeHint}>{t('spot.enableLocationForDirections')}</Text>
@@ -274,6 +283,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#475569',
     marginBottom: 12,
+  },
+  address: {
+    fontSize: 14,
+    color: '#334155',
+    marginTop: -6,
+    marginBottom: 2,
+  },
+  coords: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontVariant: ['tabular-nums'],
+    marginBottom: 10,
   },
   // Same teal / near-black as the marker ring and the report buttons.
   report: {

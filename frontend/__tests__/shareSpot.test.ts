@@ -4,6 +4,7 @@ const BASE = {
   typeLabel: 'Parking lot',
   accessLabel: 'Free parking',
   statusLine: null,
+  addressLine: null,
   lat: 52.5056164419491,
   lon: 13.3969318899245,
 };
@@ -29,6 +30,22 @@ describe('buildShareMessage', () => {
     expect(buildShareMessage({ ...BASE, statusLine: 'Reported free · 4 min ago' }).split('\n')).toEqual([
       'Parking lot · Free parking',
       'Reported free · 4 min ago',
+      '52.50562, 13.39693',
+      'https://www.google.com/maps/search/?api=1&query=52.50562,13.39693',
+    ]);
+  });
+
+  it('puts the address above the coordinates', () => {
+    expect(
+      buildShareMessage({
+        ...BASE,
+        statusLine: 'Reported free · 4 min ago',
+        addressLine: 'near Oranienstraße 12, 10997 Berlin',
+      }).split('\n'),
+    ).toEqual([
+      'Parking lot · Free parking',
+      'Reported free · 4 min ago',
+      'near Oranienstraße 12, 10997 Berlin',
       '52.50562, 13.39693',
       'https://www.google.com/maps/search/?api=1&query=52.50562,13.39693',
     ]);

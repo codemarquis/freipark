@@ -26,6 +26,17 @@ jest.mock('@gorhom/bottom-sheet', () => {
 jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(false);
 const mockShare = jest.spyOn(Share, 'share');
 jest.mock('../src/lib/posthog', () => ({ posthog: { capture: jest.fn() } }));
+jest.mock('../src/features/map/useSpotDetails', () => ({ useSpotDetails: jest.fn(() => null) }));
+const { useSpotDetails: mockUseSpotDetails } = jest.requireMock('../src/features/map/useSpotDetails') as {
+  useSpotDetails: jest.Mock;
+};
+const DETAILS = {
+  address_street: 'Oranienstraße',
+  address_housenumber: '12',
+  address_postcode: '10997',
+  address_source: 'nearest_address',
+  city_name: 'Berlin',
+};
 const { posthog: mockPosthog } = jest.requireMock('../src/lib/posthog') as {
   posthog: { capture: jest.Mock };
 };
@@ -409,5 +420,47 @@ describe('share', () => {
       fireEvent.press(screen.getByRole('button', { name: 'Share this parking spot' }));
     });
     expect(screen.getByText('Street parking')).toBeTruthy();
+  });
+});
+
+// ─── address and coordinates ────────────────────────────────────────────────
+
+describe('address and coordinates', () => {
+  afterEach(() => {
+    mockUseSpotDetails.mockReturnValue(null);
+  });
+
+  it('shows the coordinates straight away', async () => {
+    await renderSheet(BASE);
+    expect(screen.getByText('52.52000, 13.40500')).toBeTruthy();
+  });
+
+  it('asks for the details of the open spot', async () => {
+    await renderSheet(BASE);
+    expect(mockUseSpotDetails).toHaveBeenLastCalledWith('1');
+  });
+
+  it('shows the address once it has loaded', async () => {
+    mockUseSpotDetails.mockReturnValue(DETAILS);
+    await renderSheet(BASE);
+    expect(screen.getByText('near Oranienstraße 12, 10997 Berlin')).toBeTruthy();
+  });
+
+  it('shows no address line when the spot has none', async () => {
+    mockUseSpotDetails.mockReturnValue({ ...DETAILS, address_street: null, address_source: null });
+    await renderSheet(BASE);
+    expect(screen.queryByText(/Oranienstraße/)).toBeNull();
+    expect(screen.getByText('52.52000, 13.40500')).toBeTruthy();
+  });
+
+  it('includes the address in the share message', async () => {
+    mockUseSpotDetails.mockReturnValue(DETAILS);
+    mockShare.mockReset();
+    mockShare.mockResolvedValue({ action: Share.sharedAction });
+    await renderSheet(BASE);
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Share this parking spot' }));
+    });
+    expect(sharedMessage()).toContain('near Oranienstraße 12, 10997 Berlin\n52.52000, 13.40500');
   });
 });

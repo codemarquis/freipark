@@ -1888,7 +1888,15 @@ Frontend                                                                    │
 
 ### SA6 — Sheet, share message, fetching
 
-- [ ] **SA6: `useSpotDetails` + coordinates/address in `SpotDetailSheet` + address in the share message**
+- [x] **SA6: `useSpotDetails` + coordinates/address in `SpotDetailSheet` + address in the share message — done 2026-10-08; not yet seen on screen (SC1).**
+  Tests first (hook module missing; share-with-address failed), then
+  passing: hook fetches for the open spot, skips with no spot, ignores a
+  late answer for a spot no longer open, clears while the next loads,
+  null on error / no row / malformed row / unknown source / throw; sheet
+  shows coordinates at once (selectable text), the address once loaded,
+  no line without one; share message has the address above the
+  coordinates. `shareSpot.ts` now uses `formatCoords`. Frontend 200/200,
+  `tsc` clean, no `any`.
   - Hook calls `spot_details` when the sheet opens for a spot; ignores stale responses when
     the user taps another spot; errors → no address line
   - Sheet: coordinates immediately, address when loaded; share message gains the address line
