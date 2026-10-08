@@ -20,8 +20,10 @@ UPDATE parking_spots
    AND tags->>'parking' IN ('street_side', 'lane', 'on_kerb', 'half_on_kerb', 'shoulder');
 
 -- Part 2 (PR2): spot_details also returns the spot's rule tags, for the
--- app's "Paid now until 20:00" line. Only an allow-list of rule keys with
--- text values leaves the database (never name, operator, ref, …). The
+-- app's "Paid now until 20:00" line: an allow-list of rule keys with text
+-- values, so the payload holds only what the line needs. (Not a privacy
+-- boundary: parking_spots, tags included, is public OSM data and publicly
+-- readable by design — CLAUDE.md § RLS.) The
 -- result columns change, so the function is dropped and recreated;
 -- rollback: supabase/self-host/rollback_012_spot_rules.sql.
 

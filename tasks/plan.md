@@ -2401,7 +2401,8 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 - [x] **PR2: `spot_details` v2 returns `rule_tags` — done 2026-10-09.** `012` part 2 drops and
   recreates the function with `rule_tags jsonb` = allow-listed keys with text values only (filtered in
-  SQL, so name/operator/ref never leave the DB); grants unchanged; `NOTIFY pgrst`.
+  SQL to keep the payload to what the line needs — not a privacy boundary: `parking_spots.tags` is
+  public OSM data, readable by anon by design, confirmed on production 2026-10-09); grants unchanged; `NOTIFY pgrst`.
   `rollback_012_spot_rules.sql` restores the 010 function (keeps part 1's spot types). DB tests:
   allow-list for anon and authenticated, `{}` without rule tags, non-text values dropped, rollback
   twice; `test_spot_address` updated for the new column. Applied to the **local** DB (UPDATE 131,426);
@@ -2494,8 +2495,14 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
 
 ### PR6 — production (ask first)
 
-- [ ] **PR6:** backup → `012` (the UPDATE touches street-kind rows in every city; count first) →
+- [x] **PR6:** backup → `012` (the UPDATE touches street-kind rows in every city; count first) →
   check `spot_details` as anon → app release carries the UI. Rollback: `rollback_012_spot_rules.sql`.
+  **Production done 2026-10-09:** backup `freipark-db-20261008T222210Z.sql.gz` (86 MB); count
+  131,426 to change (Berlin 42,497) — same as local; `012` → `UPDATE 131426`, function recreated,
+  COMMIT; run a second time by accident → `UPDATE 0` (re-run safety confirmed on production). Now
+  street 144,030 / lot 392,070 / garage 11,490. Public API as anon: `spot_details` has `rule_tags`;
+  82 of 125 spots near Alexanderplatz are `street`; Karl-Liebknecht-Str. 11 returns `fee`, `zone=29`,
+  `fee:conditional=no @ (00:00-09:00)`. **The rule line reaches users with the next app build.**
 
 **Risks**
 
