@@ -13,7 +13,8 @@ import { SpotLayer } from './SpotLayer';
 import { RouteLayer } from './RouteLayer';
 import { SearchBar } from './SearchBar';
 import { SpotDetailSheet } from './SpotDetailSheet';
-import { AccountButton } from '../auth/AccountButton';
+import { SettingsButton } from '../settings/SettingsButton';
+import { SettingsSheet } from '../settings/SettingsSheet';
 import { AuthSheet } from '../auth/AuthSheet';
 import type { GeoResult } from './useGeocoder';
 import type { SpotRow } from '../../lib/types';
@@ -66,8 +67,10 @@ export function MapScreen() {
   const [locationDenied, setLocationDenied] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const { geojson, onRegionDidChange, refetch } = useSpots();
-  // Opened when a signed-out user taps a report button in SpotDetailSheet.
-  const [reportSignInVisible, setReportSignInVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  // One sign-in sheet for the screen: opened from Settings' "Sign in" and by
+  // a signed-out tap on a report button in SpotDetailSheet.
+  const [signInVisible, setSignInVisible] = useState(false);
   const route = useRoute(userLocation, selectedSpot);
 
   useEffect(() => {
@@ -162,7 +165,7 @@ export function MapScreen() {
       </Map>
 
       <SearchBar onSelect={handleGeoSelect} />
-      <AccountButton />
+      <SettingsButton onPress={() => setSettingsVisible(true)} />
 
       {locationLoading && !locationDenied && (
         <View style={styles.locatingChip} pointerEvents="none">
@@ -204,9 +207,18 @@ export function MapScreen() {
         route={route}
         locationDenied={locationDenied}
         onReported={refetch}
-        onSignInRequired={() => setReportSignInVisible(true)}
+        onSignInRequired={() => setSignInVisible(true)}
       />
-      <AuthSheet visible={reportSignInVisible} onClose={() => setReportSignInVisible(false)} />
+      <SettingsSheet
+        visible={settingsVisible}
+        onClose={() => setSettingsVisible(false)}
+        onSignInRequested={() => {
+          // Close Settings first so only one sheet is ever open.
+          setSettingsVisible(false);
+          setSignInVisible(true);
+        }}
+      />
+      <AuthSheet visible={signInVisible} onClose={() => setSignInVisible(false)} />
     </View>
   );
 }

@@ -1989,7 +1989,7 @@ Frontend                                                                    │
 **Module:** `settings`
 **Build position:** after `spot-address`; depends on `auth` and i18n. Frontend only.
 
-> **Status (2026-10-08):** planned, nothing built.
+> **Status (2026-10-08):** ST1–ST4 built; simulator check (STC1) pending.
 
 ## Dependency Graph
 
@@ -2064,7 +2064,14 @@ Frontend                                                                    │
 
 ### ST4 — `SettingsButton` and wiring
 
-- [ ] **ST4: `SettingsButton` replaces `AccountButton`; one screen-level `AuthSheet`**
+- [x] **ST4: `SettingsButton` replaces `AccountButton`; one screen-level `AuthSheet` — done 2026-10-08; not yet seen on screen (STC1).**
+  2 button tests written first (module missing), then passing: accessible
+  "Settings" label, text gear `\u2699\uFE0E`, `onPress`. `MapScreen`:
+  `SettingsButton` opens `SettingsSheet`; Settings' "Sign in" closes
+  Settings, then opens the one shared `AuthSheet`, which the report
+  buttons also use (the separate report-only instance is gone).
+  `AccountButton.tsx` deleted (`MapScreen` was its only user). Frontend
+  213/213 across 16 suites, `tsc` clean.
   - `SettingsButton` (`⚙︎`, a11y label) opens `SettingsSheet`; Settings' "Sign in" closes Settings and
     opens the shared `AuthSheet`; the report buttons use the same instance
   - `AccountButton.tsx` deleted (its only use is `MapScreen`)
