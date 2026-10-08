@@ -2338,6 +2338,24 @@ Decided: keep both, disclose, ask first.
   `ConsentSheet` on first launch (two identical buttons); Settings → Privacy switches. Less data:
   no session replay, no feedback widget, `sendDefaultPii: false`, console breadcrumbs dropped,
   `identify` without email. de/en/tr keys. Frontend 255/255, `tsc` clean.
-- [ ] **AC2: simulator check** — fresh install shows the sheet; no Sentry/PostHog request before a
-  choice; switches persist across restarts.
-- [ ] **AC3: privacy policy + App Store privacy label** match what is sent.
+- [x] **AC2: simulator check — done 2026-10-08 (iPad Pro 13", local stack).** Fresh install shows
+  the sheet; "Don't allow" stores both off; relaunch doesn't ask again; Settings → Privacy shows the
+  stored choice, a change is saved at once and survives a relaunch. Found: a native `<Switch>` inside
+  the bottom sheet got no taps → replaced with Pressable toggles (`accessibilityRole="switch"`).
+  Network silence before consent rests on the code (`defaultOptIn: false`, no `Sentry.init`) and the
+  unit tests; not proxied.
+- [x] **AC3: privacy policy rewritten 2026-10-08** (`PRIVACY_POLICY.md`; page at freipark.com/privacy
+  on the landing repo's `privacy-page` branch). Controller name, address and contact email still to
+  fill in; App Store privacy label answers listed in the hand-over.
+
+### Pre-submission check (2026-10-08)
+
+- `app.json`: `usesNonExemptEncryption: false`; `requireFullScreen: true` (portrait-only + iPad
+  fails validation otherwise); privacy manifest with the required-reason APIs of all 11 library
+  manifests. iPad kept (user's choice); layout checked on the 13" simulator.
+- Spot sheet opens at 55% (was 35%) and scrolls.
+- RCC1's unexplained first road-line tap: MapLibre iOS sends a tap only to the touchable source
+  with the highest z-index among those with a feature within 22 pt; spots sit above road events, so a
+  tap on a line next to a cluster zooms into the cluster instead. Intended precedence; no change.
+- Autobahn reuse terms: none published (bund.dev spec lists only kontakt@autobahn.de); permission
+  asked by email, layer ships with the credit; if refused, stop the cron and empty the Autobahn rows.
