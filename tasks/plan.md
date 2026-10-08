@@ -2147,7 +2147,15 @@ App
 
 ### RC1 — Migration `011` and the read RPC
 
-- [ ] **RC1: `supabase/migrations/011_road_events.sql` + DB tests**
+- [x] **RC1: `supabase/migrations/011_road_events.sql` + DB tests — done 2026-10-08, local only.**
+  9 DB tests written first (all errored: table missing), then passing:
+  anon gets only in-box events with the documented columns; GeoJSON
+  geometry and the details (description array, end date) come back
+  intact; signed-in users can call it; `lim` respected; anon and
+  authenticated can't read or write the table; unknown source/kind
+  rejected; one row per `(source, source_id)`. Applied locally twice
+  (re-run safe). Through local Kong: anon RPC → `[]` (HTTP 200); anon
+  table read → `42501`. Backend suite 124/124.
   - Table, CHECKs, unique `(source, source_id)`, GiST index, RLS on, no client grants;
     `road_events_in_bbox` (SECURITY DEFINER, pinned search_path, EXECUTE to anon/authenticated)
     returning GeoJSON geometry
