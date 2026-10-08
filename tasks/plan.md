@@ -1741,7 +1741,7 @@ features become spots.
 **Build position:** after `spot-reports`; depends on `infra` (import,
 `parking_spots`) and `map` (sheet, share message).
 
-> **Status (2026-10-07):** planned, nothing built.
+> **Status (2026-10-08):** SA1–SA7 and SC1 done; live on production. Not yet in a released app build.
 
 ## Dependency Graph
 
@@ -1945,7 +1945,22 @@ Frontend                                                                    │
 
 ### SA7 — Production (ask first)
 
-- [ ] **SA7: apply `010`, copy the address columns, verify** — *prepared and rehearsed 2026-10-08; not yet run on production.*
+- [x] **SA7: apply `010`, copy the address columns, verify — done on production 2026-10-08.**
+  **Step 1:** backup `freipark-db-20261008T141622Z.sql.gz`; server checkout
+  fast-forwarded to `ef0fe3f`; `009` → **`DELETE 0`**, not the expected
+  34,184 — checked before continuing: production already had 547,590
+  spots (Cottbus 3,036, Berlin 63,751, identical to local), i.e. `009`
+  had already been applied earlier, and it is idempotent. `010` applied;
+  PostgREST reloaded; `spot_details` answered (empty address) for the
+  Kreuzberg car park.
+  **Step 2:** address transfer — staged 500,108, updated 500,108, per
+  source identical to local (nearest_address 413,781, nearest_street
+  72,532, street_name 11,662, own_tags 2,133, none 47,482), total 547,590.
+  **Verified via the public API:** Kreuzberg car park → Lindenstraße 69,
+  10969 (`nearest_address`); Cottbus street spot → Berliner Straße
+  (`street_name`); unaddressed Berlin lot → empty; `/health/db` ok,
+  547,590 spots, 80 cities.
+  *(Preparation notes follow.)*
   - `supabase/self-host/rollback_010_spot_address.sql` rehearsed locally in
     a rolled-back transaction: `spot_details` and all 5 columns gone,
     547,590 spots kept, `spots_in_bbox` still works.

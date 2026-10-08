@@ -2,7 +2,7 @@
 
 **Module:** `spot-address`
 **Capability map:** [CLAUDE.md](CLAUDE.md) → after `spot-reports`. Depends on `infra` (import pipeline, `parking_spots`) and `map` (`SpotDetailSheet`, share message). Independent of auth.
-**Status:** Approved 2026-10-07 (open-question defaults accepted) — tasks in `tasks/plan.md` § Implementation Plan: spot-address.
+**Status:** Implemented and live on production 2026-10-08 (SA1–SA7, `tasks/plan.md` § Implementation Plan: spot-address). Success criteria 1–6 met: Berlin 97.9% addressed, Germany 91.3%; full Berlin import 41 s; production per-source counts identical to local. Not yet in a released app build.
 
 ---
 
