@@ -2305,7 +2305,7 @@ App
 
 ### RC7 — Production (ask first)
 
-- [ ] **RC7: `011`, rebuild `api`, Autobahn cron, OSM construction transfer**
+- [x] **RC7: `011`, rebuild `api`, Autobahn cron, OSM construction transfer — done 2026-10-08**
   - Order: backup → `011` → `docker compose up -d --build api` → one manual sweep in the container
     (verify counts) → install `*/30 * * * *` cron → OSM rows transferred (Mac → server, as before)
   - Rollback: a tested `rollback_011_road_events.sql` (function, table) written before applying; the
@@ -2316,4 +2316,10 @@ App
     `api` container as `supabase_admin` via `PGPASSWORD`, overriding backend/.env's `DATABASE_URL`)
     tested with the same command in a one-off `api` container on the local stack: 222 requests,
     0 failed, 4,056 events, 48 stale removed, 68 s.
+  - **Production 2026-10-08:** backup `freipark-db-20261008T160905Z.sql.gz` (86 MB) → `011` applied
+    (COMMIT, schema reloaded) → `api` rebuilt (healthy) → manual sweep: 222 requests, 1 failed,
+    4,049 events (1,837 roadworks, 1,551 short-term, 572 ramp closures, 89 closures), 64 s → cron
+    `*/30` installed beside backup and purge (the 19:00 run changed the count to 4,048) → 6,290 OSM
+    construction rows transferred in one transaction (COPY/INSERT 6,290, DELETE 0). The anon key
+    reads 21 events around the A100 through `road_events_in_bbox`; the table itself returns 401.
   - **Before users see it:** Autobahn reuse terms confirmed
