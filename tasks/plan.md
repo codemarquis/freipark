@@ -2025,7 +2025,16 @@ Frontend                                                                    │
 
 ### ST2 — `SettingsSheet`
 
-- [ ] **ST2: `src/features/settings/SettingsSheet.tsx`**
+- [x] **ST2: `src/features/settings/SettingsSheet.tsx` — done 2026-10-08.**
+  10 tests written first (module missing), then passing: sections; signed
+  out → "Sign in or create account" calls `onSignInRequested`; signed in
+  → email, Sign Out (success closes, error stays open), Delete Account
+  (confirm dialog; Cancel does nothing; Delete success closes; error stays
+  open); language buttons with `accessibilityState.selected` and a live
+  switch to German and back. Delete had **no tests before** (AuthSheet
+  only tested sign-out); now covered. Sign-out/delete handlers moved
+  verbatim (still close the sheet on success). Frontend 213/213, `tsc`
+  clean, no `any`. AuthSheet unchanged until ST3.
   - Account: signed out → "Sign in or create account" calls `onSignInRequested`; signed in →
     email, Sign out, Delete account (confirm dialog), handlers and error text moved verbatim from
     `AuthSheet`
