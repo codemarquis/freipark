@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
 import { posthog } from '../../lib/posthog';
 import { PaymentLinks } from './PaymentLinks';
@@ -15,7 +15,9 @@ import type { SubmittedReport } from '../reports/useReportSpot';
 import type { RouteState } from './useRoute';
 import type { SpotRow } from '../../lib/types';
 
-const SNAP_POINTS = ['35%', '55%'];
+// 55% shows the type, status, address, route and report buttons with the
+// map still visible; drag up (or scroll) for share and the maps buttons.
+export const SNAP_POINTS = ['55%', '90%'];
 
 // Distances stay in m/km — identical abbreviations across de/en/tr, no
 // translation needed. Durations do need it ("min"/"Min"/"dk" etc.).
@@ -179,11 +181,12 @@ export function SpotDetailSheet({
       ref={sheetRef}
       index={-1}
       snapPoints={SNAP_POINTS}
+      enableDynamicSizing={false}
       enablePanDownToClose
       onClose={onClose}
       style={styles.sheet}
     >
-      <BottomSheetView style={styles.content}>
+      <BottomSheetScrollView contentContainerStyle={styles.content}>
         {spot && (
           <>
             <Text style={styles.type}>{t(TYPE_LABEL_KEY[spot.spot_type])}</Text>
@@ -254,7 +257,7 @@ export function SpotDetailSheet({
             )}
           </>
         )}
-      </BottomSheetView>
+      </BottomSheetScrollView>
     </BottomSheet>
   );
 }
@@ -267,11 +270,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  // No flex: 1 — the scroll view's content must be free to grow past the sheet.
   content: {
-    flex: 1,
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: 40, // clear of the home indicator
   },
   type: {
     fontSize: 20,

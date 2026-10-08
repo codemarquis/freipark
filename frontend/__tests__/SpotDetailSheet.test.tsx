@@ -1,7 +1,7 @@
 import { Linking, Share } from 'react-native';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import '../src/i18n';
-import { SpotDetailSheet } from '../src/features/map/SpotDetailSheet';
+import { SNAP_POINTS, SpotDetailSheet } from '../src/features/map/SpotDetailSheet';
 import type { SpotRow } from '../src/lib/types';
 import type { RouteState } from '../src/features/map/useRoute';
 
@@ -20,6 +20,8 @@ jest.mock('@gorhom/bottom-sheet', () => {
     }),
     BottomSheetView: ({ children }: any) =>
       React.createElement(View, null, children),
+    BottomSheetScrollView: ({ children }: { children: unknown }) =>
+      React.createElement(View, { testID: 'spot-sheet-scroll' }, children),
   };
 });
 
@@ -114,6 +116,15 @@ describe('when spot is null', () => {
     await renderSheet(null);
     expect(screen.queryByText('Street parking')).toBeNull();
     expect(screen.queryByText('Open EasyPark')).toBeNull();
+  });
+});
+
+describe('sheet height', () => {
+  it('opens at 55% and scrolls, so no action is out of reach', async () => {
+    expect(SNAP_POINTS).toEqual(['55%', '90%']);
+    await renderSheet(BASE);
+    const scroll = screen.getByTestId('spot-sheet-scroll');
+    expect(within(scroll).getByText('Share')).toBeTruthy();
   });
 });
 

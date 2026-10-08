@@ -215,7 +215,7 @@ mirror goes live.
 
 **Tap cluster** → camera animates to cluster centroid, zoom +2.
 
-**Tap single spot** → `SpotDetailSheet` slides up (half-screen snap point).
+**Tap single spot** → `SpotDetailSheet` slides up to 55% (drag to 90%); its content scrolls, so share and "Open in Maps" are never out of reach (changed 2026-10-08 from 35%, where they sat below the fold).
 
 **SpotDetailSheet content:**
 

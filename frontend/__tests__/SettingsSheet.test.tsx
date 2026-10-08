@@ -176,22 +176,26 @@ describe('SettingsSheet — privacy', () => {
   it('shows both switches off when nothing was chosen', async () => {
     await renderSheet();
     await waitFor(() => expect(loadConsent).toHaveBeenCalled());
-    expect(screen.getByLabelText('Crash reports').props.value).toBe(false);
-    expect(screen.getByLabelText('Usage statistics').props.value).toBe(false);
+    expect(screen.getByRole('switch', { name: 'Crash reports' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Usage statistics' })).not.toBeChecked();
   });
 
   it('shows the stored choice', async () => {
     loadConsent.mockResolvedValueOnce({ crashReports: true, analytics: false, decidedAt: '2026-10-08T18:00:00.000Z' });
     await renderSheet();
-    await waitFor(() => expect(screen.getByLabelText('Crash reports').props.value).toBe(true));
-    expect(screen.getByLabelText('Usage statistics').props.value).toBe(false);
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Crash reports' })).toBeChecked(),
+    );
+    expect(screen.getByRole('switch', { name: 'Usage statistics' })).not.toBeChecked();
   });
 
   it('saves a change straight away, keeping the other choice', async () => {
     loadConsent.mockResolvedValueOnce({ crashReports: true, analytics: false, decidedAt: '2026-10-08T18:00:00.000Z' });
     await renderSheet();
-    await waitFor(() => expect(screen.getByLabelText('Crash reports').props.value).toBe(true));
-    fireEvent(screen.getByLabelText('Usage statistics'), 'valueChange', true);
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Crash reports' })).toBeChecked(),
+    );
+    await fireEvent.press(screen.getByRole('switch', { name: 'Usage statistics' }));
     await waitFor(() => expect(saveConsent).toHaveBeenCalledWith({ crashReports: true, analytics: true }));
   });
 });

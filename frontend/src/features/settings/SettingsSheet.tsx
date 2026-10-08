@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import type { BottomSheetMethods } from '@gorhom/bottom-sheet/lib/typescript/types';
@@ -149,16 +149,26 @@ export function SettingsSheet({ visible, onClose, onSignInRequested }: SettingsS
         </View>
 
         <Text style={[styles.sectionLabel, styles.sectionSpacing]}>{t('settings.privacy')}</Text>
-        {CONSENT_ROWS.map(({ key, label }) => (
-          <View key={key} style={styles.switchRow}>
-            <Text style={styles.switchLabel}>{t(label)}</Text>
-            <Switch
-              value={choice[key]}
-              onValueChange={(value) => handleConsentChange(key, value)}
+        {/* Pressable rows, not <Switch>: a native UISwitch inside the
+            gesture-handled bottom sheet didn't receive taps on iOS. */}
+        {CONSENT_ROWS.map(({ key, label }) => {
+          const on = choice[key];
+          return (
+            <Pressable
+              key={key}
+              style={styles.switchRow}
+              onPress={() => handleConsentChange(key, !on)}
+              accessibilityRole="switch"
               accessibilityLabel={t(label)}
-            />
-          </View>
-        ))}
+              accessibilityState={{ checked: on }}
+            >
+              <Text style={styles.switchLabel}>{t(label)}</Text>
+              <View style={[styles.track, on && styles.trackOn]}>
+                <View style={[styles.thumb, on && styles.thumbOn]} />
+              </View>
+            </Pressable>
+          );
+        })}
       </BottomSheetView>
     </BottomSheet>
   );
@@ -177,7 +187,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 24,
+    paddingBottom: 40, // keeps the last row clear of the home indicator
   },
   title: {
     fontSize: 20,
@@ -234,6 +244,25 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 15,
     color: '#1e293b',
+  },
+  track: {
+    width: 46,
+    height: 28,
+    borderRadius: 14,
+    padding: 3,
+    backgroundColor: '#cbd5e1',
+  },
+  trackOn: {
+    backgroundColor: '#6366f1',
+  },
+  thumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+  },
+  thumbOn: {
+    transform: [{ translateX: 18 }],
   },
   languageRow: {
     flexDirection: 'row',
