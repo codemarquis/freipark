@@ -2193,7 +2193,20 @@ App
 
 ### RC3 — Local live sweep
 
-- [ ] **RC3: run the fetcher once against the real API into the local DB**
+- [x] **RC3: run the fetcher once against the real API into the local DB — done 2026-10-08.**
+  **First live run crashed and wrote nothing:** a real item ends "bis
+  24:00 Uhr", and `datetime()` rejects hour 24 — one item killed the
+  whole sweep. Fixed test-first: "24:00" = midnight starting the next
+  day; impossible dates (31.02.) ignored; and **any unreadable item is
+  skipped and counted, never fatal** (3 new tests failed with the real
+  errors, then passed; backend 153/153).
+  Live sweep after the fix: 224 requests, 0 failed, **4,099 events** in
+  70 s (roadworks 1,840; short-term 1,586; entry/exit closures 585;
+  closures 88), 0 unreadable. End dates: all roadworks and closures;
+  1,158 of 1,586 short-term (the rest give no window). A100 items
+  correct, e.g. "Beusselstraße – Schmargendorf, Wedding → Neukölln,
+  closure until 09.10.26 23:59". Second run: still 4,099 rows (4,099
+  distinct ids), `fetched_at` advanced — updates in place.
   - Acceptance: counts per kind ≈ the live API (within failed requests); A100 roadworks present;
     a second run updates in place (row count stable)
   - Files: none (data); results recorded here

@@ -17,7 +17,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -49,9 +49,17 @@ _WINDOW = re.compile(r"(\d{2})\.(\d{2})\.(\d{2})\s+von\s+\d{1,2}:\d{2}\s+bis\s+(
 _PROJECT_END = re.compile(r"Ende der Gesamtmaßnahme:\s*(\d{2})\.(\d{2})\.(\d{2})")
 
 
-def _local(day: str, month: str, year: str, hour: str | None, minute: str | None) -> datetime:
-    return datetime(2000 + int(year), int(month), int(day),
-                    int(hour) if hour else 23, int(minute) if minute else 59, tzinfo=BERLIN)
+def _local(day: str, month: str, year: str, hour: str | None, minute: str | None) -> datetime | None:
+    """A German local date/time, or None if it doesn't exist (e.g. 31.02.).
+    "24:00" — common in the live data — means midnight starting the next day."""
+    h = int(hour) if hour else 23
+    m = int(minute) if minute else 59
+    try:
+        if h == 24 and m == 0:
+            return datetime(2000 + int(year), int(month), int(day), tzinfo=BERLIN) + timedelta(days=1)
+        return datetime(2000 + int(year), int(month), int(day), h, m, tzinfo=BERLIN)
+    except ValueError:
+        return None
 
 
 def parse_end(description: list[str]) -> datetime | None:
@@ -60,7 +68,8 @@ def parse_end(description: list[str]) -> datetime | None:
         m = _PHASE_END.search(line)
         if m:
             return _local(*m.groups())
-    windows = [_local(d, mo, y, h, mi) for line in description for d, mo, y, h, mi in _WINDOW.findall(line)]
+    windows = [w for line in description for d, mo, y, h, mi in _WINDOW.findall(line)
+               if (w := _local(d, mo, y, h, mi)) is not None]
     if windows:
         return max(windows)
     for line in description:
@@ -101,6 +110,7 @@ class SweepResult:
     events: list[dict] = field(default_factory=list)
     requests: int = 0
     failed: int = 0
+    skipped: int = 0  # items we couldn't read; never fatal to the sweep
 
 
 def sweep(client: httpx.Client, pause: float = 0.2) -> SweepResult:
@@ -119,7 +129,11 @@ def sweep(client: httpx.Client, pause: float = 0.2) -> SweepResult:
                 result.failed += 1
                 continue
             for item in items:
-                event = parse_item(item, road) if isinstance(item, dict) else None
+                try:
+                    event = parse_item(item, road) if isinstance(item, dict) else None
+                except Exception:  # one odd item must not cost the whole sweep
+                    result.skipped += 1
+                    continue
                 if event and event["source_id"] not in seen:  # same item can appear under two roads
                     seen.add(event["source_id"])
                     result.events.append(event)
@@ -172,7 +186,7 @@ def main() -> int:
     for e in result.events:
         kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
     print(f"[autobahn] {datetime.now(BERLIN):%Y-%m-%d %H:%M} {result.requests} requests, {result.failed} failed, "
-          f"{len(result.events)} events {kinds}, removed {stats['removed']}"
+          f"{len(result.events)} events {kinds}, {result.skipped} unreadable, removed {stats['removed']}"
           f"{'' if stats['good_sweep'] else ' (poor sweep: nothing removed)'}, {time.time() - started:.0f}s")
     return 0
 

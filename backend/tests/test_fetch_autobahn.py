@@ -98,6 +98,18 @@ def test_winter_dates_use_central_european_time():
     assert fa.parse_end(["Ende: 15.01.27 um 08:00 Uhr"]).utcoffset().total_seconds() == 3600
 
 
+def test_24_00_means_midnight_at_the_start_of_the_next_day():
+    # Seen in the live API: "bis 24:00 Uhr". datetime() rejects hour 24.
+    assert fa.parse_end(["12.10.26 von 22:00 bis 24:00 Uhr"]) == datetime(2026, 10, 13, 0, 0, tzinfo=BERLIN)
+    assert fa.parse_end(["Ende: 31.12.26 um 24:00 Uhr"]) == datetime(2027, 1, 1, 0, 0, tzinfo=BERLIN)
+
+
+def test_impossible_dates_are_ignored_not_fatal():
+    assert fa.parse_end(["Ende: 31.02.26 um 10:00 Uhr"]) is None
+    assert fa.parse_end(["31.02.26 von 08:00 bis 10:00 Uhr", "12.10.26 von 08:00 bis 10:00 Uhr"]) == datetime(
+        2026, 10, 12, 10, 0, tzinfo=BERLIN)
+
+
 def test_no_recognisable_end_gives_none():
     assert fa.parse_end(["Sperrung wegen Bauarbeiten", ""]) is None
 
@@ -147,6 +159,20 @@ def test_sweep_counts_failures_and_keeps_going():
     result = fa.sweep(make_client(failing_paths=("/services/closure",)), pause=0)
     assert result.failed == 1
     assert sorted(e["kind"] for e in result.events) == ["roadworks", "short_term_roadworks"]
+
+
+def test_one_unreadable_item_does_not_stop_the_sweep(monkeypatch):
+    real_parse = fa.parse_item
+
+    def flaky(item, road):
+        if item.get("display_type") == "CLOSURE":
+            raise RuntimeError("unexpected format")
+        return real_parse(item, road)
+
+    monkeypatch.setattr(fa, "parse_item", flaky)
+    result = fa.sweep(make_client(), pause=0)
+    assert result.skipped == 1
+    assert sorted(e["kind"] for e in result.events) == ["entry_exit_closure", "roadworks", "short_term_roadworks"]
 
 
 # --- Storing (DB) ----------------------------------------------------------------
