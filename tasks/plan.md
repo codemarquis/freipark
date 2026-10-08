@@ -1923,7 +1923,22 @@ Frontend                                                                    │
 
 ### Checkpoint SC1 — simulator against the local stack
 
-- [ ] **SC1:** `c1.env` setup from C1. A Berlin car park shows "near …" + coordinates; a
+- [x] **SC1 — done 2026-10-08** (simulator, local stack via `c1.env`, driven with `idb`):
+  - Kreuzberg car park: sheet shows **"near Lindenstraße 69, 10969 Berlin"**
+    and **52.50598, 13.39720**, plus the **Occupied** label and **Share**.
+  - Share → iOS share sheet opens; copied text (read back with
+    `simctl pbpaste`) is exactly: type · access / address / coordinates /
+    Google Maps link.
+  - Unaddressed lot (Berlin, 52.50792, 13.40059): coordinates only, no
+    gap, no error.
+  - Cottbus street spot: clustered at this zoom, so checked via the local
+    API instead — `spot_details` returns `Berliner Straße` /
+    `street_name` / `Cottbus`, shown as "Berliner Straße, Cottbus"
+    (formatting covered by SA5 tests).
+  - **Layout:** at the 35% snap point everything down to **Share** fits;
+    "Open in Apple Maps" now sits below the fold (drag up to reach).
+  Metro stopped and the simulator shut down afterwards.
+  *(Original task text follows.)* `c1.env` setup from C1. A Berlin car park shows "near …" + coordinates; a
   street spot (another city) shows its street name; a spot with no address shows only
   coordinates; the share sheet text includes the address. Check the sheet's first snap
   height now that it has two more lines (and the Share button from earlier).
