@@ -62,7 +62,8 @@
     "lessThanOneMin": "<1 Min",
     "hoursMinutes": "{{h}} Std {{m}} Min",
     "share": "Teilen",
-    "shareA11y": "Diesen Parkplatz teilen"
+    "shareA11y": "Diesen Parkplatz teilen",
+    "addressNear": "bei {{address}}"
   },
   "payment": {
     "openEasyPark": "EasyPark öffnen"

@@ -1870,7 +1870,12 @@ Frontend                                                                    │
 
 ### SA5 — Address formatting and translations
 
-- [ ] **SA5: `features/map/spotAddress.ts` + keys in de/en/tr**
+- [x] **SA5: `features/map/spotAddress.ts` + keys in de/en/tr — done 2026-10-08.**
+  10 tests written first (module missing), then passing: every source,
+  missing number/postcode, no street → null, DE "bei …", TR "… yakınında",
+  coordinates format, key parity, and no HTML-escaping of `'`/`&`
+  (i18n has `escapeValue: false`). Frontend 185/185, `tsc` clean.
+  `formatCoords` lives here; `shareSpot.ts` switches to it in SA6.
   - `formatAddress(details, t)`: "Oranienstraße 12, 10997 Berlin" for `own_tags`;
     street + city for `street_name`; "near …" for `nearest_address` / `nearest_street`;
     null when there's no street. `formatCoords(lat, lon)` → `52.50562, 13.39693`

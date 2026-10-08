@@ -62,7 +62,8 @@
     "lessThanOneMin": "<1 min",
     "hoursMinutes": "{{h}}h {{m}}m",
     "share": "Share",
-    "shareA11y": "Share this parking spot"
+    "shareA11y": "Share this parking spot",
+    "addressNear": "near {{address}}"
   },
   "payment": {
     "openEasyPark": "Open EasyPark"

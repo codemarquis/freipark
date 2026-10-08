@@ -62,7 +62,8 @@
     "lessThanOneMin": "<1 dk",
     "hoursMinutes": "{{h}} sa {{m}} dk",
     "share": "Paylaş",
-    "shareA11y": "Bu park yerini paylaş"
+    "shareA11y": "Bu park yerini paylaş",
+    "addressNear": "{{address}} yakınında"
   },
   "payment": {
     "openEasyPark": "EasyPark'ı Aç"
