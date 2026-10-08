@@ -10,7 +10,7 @@ import { buildShareMessage } from './shareSpot';
 import { formatAddress, formatCoords } from './spotAddress';
 import { useSpotDetails } from './useSpotDetails';
 import { ReportButtons } from '../reports/ReportButtons';
-import { RuleLine } from '../rules/RuleLine';
+import { RuleLine, hasDefiniteRule } from '../rules/RuleLine';
 import { activeReport } from '../reports/reportStatus';
 import type { SubmittedReport } from '../reports/useReportSpot';
 import type { RouteState } from './useRoute';
@@ -191,9 +191,13 @@ export function SpotDetailSheet({
         {spot && (
           <>
             <Text style={styles.type}>{t(TYPE_LABEL_KEY[spot.spot_type])}</Text>
-            <Text style={styles.access}>
-              {spot.access ? t(ACCESS_LABEL_KEY[spot.access]) : t('spot.accessUnknown')}
-            </Text>
+            {/* The rule line, once definite, replaces the static label —
+                "Paid parking" above "Free now · paid from 09:00" reads as a contradiction. */}
+            {!hasDefiniteRule(details?.rule_tags ?? null) && (
+              <Text style={styles.access}>
+                {spot.access ? t(ACCESS_LABEL_KEY[spot.access]) : t('spot.accessUnknown')}
+              </Text>
+            )}
             <RuleLine ruleTags={details?.rule_tags ?? null} />
             {report && (
               <Text

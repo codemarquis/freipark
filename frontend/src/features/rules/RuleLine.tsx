@@ -14,6 +14,15 @@ const TONE_COLOUR: Record<RuleTone, string> = {
   unknown: '#64748b',
 };
 
+/** True when the rule line gives a definite answer (anything but "unknown"),
+ *  so the sheet can drop its older static access label (SPEC-parking-rules.md).
+ *  Checked when the sheet renders; a rule that turns "unknown" later while the
+ *  sheet stays open (e.g. only access:conditional, no fee) brings the label
+ *  back at the next render. */
+export function hasDefiniteRule(ruleTags: Record<string, string> | null): boolean {
+  return ruleTags !== null && ruleNow(parseRules(ruleTags)).state !== 'unknown';
+}
+
 interface RuleLineProps {
   /** The spot's rule tags; null while spot_details is loading. */
   ruleTags: Record<string, string> | null;

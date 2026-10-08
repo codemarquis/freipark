@@ -2490,8 +2490,9 @@ PR1/PR2 (backend) and PR3/PR4 (frontend, pure functions) are independent and can
   new state `permit`, "Permit holders only", rechecked on screen; Nossener Str. (Hellersdorf) →
   "Street parking" + green "Free". Consent sheet appeared on this simulator's first launch too. The
   simulator can't change its clock, so 09:00/20:00 boundaries rest on PR4's tests. Frontend 340/340.
-  *Follow-up (UX):* the old static access label ("Paid parking") sits right above "Free now · paid
-  from 09:00"; consider hiding it when the rule line knows better.
+  *Follow-up (UX), done 2026-10-09:* the old static access label ("Paid parking") sat right above
+  "Free now · paid from 09:00"; it's now hidden once the rule line has a definite state (kept while
+  loading and when unknown). 3 sheet tests; frontend 343/343.
 
 ### PR6 — production (ask first)
 

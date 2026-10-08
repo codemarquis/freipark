@@ -150,6 +150,11 @@ the 300 m radius instead of 150 m. Fixed as part of this module (PR1).
 - **Always shown with:** "From OpenStreetMap — signs on site take
   precedence." (liability; de/en/tr).
 - `access=no|private` street areas show "Not public".
+- **The older static access label** ("Paid parking", "Free parking", "Permit
+  required") is hidden once the rule line has a definite state, because the
+  two could read as a contradiction ("Paid parking" above "Free now · paid
+  from 09:00"). It stays while details load and when the rules are unknown.
+  (Added 2026-10-09 after PRC1.)
 
 ### Out of scope (v1)
 

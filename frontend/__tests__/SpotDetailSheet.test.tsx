@@ -459,6 +459,25 @@ describe('address and coordinates', () => {
     expect(screen.getByText('From OpenStreetMap — signs on site take precedence.')).toBeTruthy();
   });
 
+  it('hides the static access label once the rule line knows better (no "Paid parking" above "Free now")', async () => {
+    mockUseSpotDetails.mockReturnValue({ ...DETAILS, rule_tags: { fee: 'no' } });
+    await renderSheet({ ...BASE, access: 'paid' });
+    expect(screen.getByText('Free')).toBeTruthy();
+    expect(screen.queryByText('Paid parking')).toBeNull();
+  });
+
+  it('keeps the static access label when the rules are unknown', async () => {
+    mockUseSpotDetails.mockReturnValue({ ...DETAILS, rule_tags: {} });
+    await renderSheet({ ...BASE, access: 'paid' });
+    expect(screen.getByText('Rules unknown — check the signs')).toBeTruthy();
+    expect(screen.getByText('Paid parking')).toBeTruthy();
+  });
+
+  it('keeps the static access label while details are loading', async () => {
+    await renderSheet({ ...BASE, access: 'paid' });
+    expect(screen.getByText('Paid parking')).toBeTruthy();
+  });
+
   it('shows no rule line while details are loading', async () => {
     await renderSheet(BASE);
     expect(screen.queryByText('From OpenStreetMap — signs on site take precedence.')).toBeNull();
